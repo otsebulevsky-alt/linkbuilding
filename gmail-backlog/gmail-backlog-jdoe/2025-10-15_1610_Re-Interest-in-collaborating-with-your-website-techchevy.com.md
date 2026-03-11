@@ -1,0 +1,58 @@
+# Re: Interest in collaborating with your website techchevy.com
+
+- **Date:** Wed, 15 Oct 2025 21:10:29 +0500
+- **From:** Outreach Media <contact@outreachmedia.io>
+- **To:** Feruza Zakirkhodjaeva <f.zakirkhojaeva@rantsports.com>
+
+---
+
+Thank you for reaching out to us. We appreciate your interest in our
+content placement services. Below are the details regarding our pricing
+structure:
+
+   - *Regular price:* *80$*
+   - *Permanent article* (will never be deleted)
+   - *Not marked as sponsored*
+   - *Min 1000 words*
+   - *Especial niches accepted:*
+
+
+   1. Casino: *120$*
+   2. CBD:     *120$*
+   3. Loan:    * 90**$*
+   4. Crypto:   *90**$*
+   5. Link Insertion: *100$*
+
+
+   - *Backlinks*: we accept max 2 do follow links
+   - *Payment Method:* We accept payments via PayPal, Payoneer, Skrill, BTC
+   & Pakistani Banks. it must be within two days.
+
+
+*If you have any further questions or if you would like to proceed with
+placing content on our platform, please feel free to reach out. We look
+forward to the possibility of working together.*
+Thank you for considering our services.
+
+*Best Regards:*
+Outreach media
+
+On Wed, Oct 15, 2025 at 8:42 PM Feruza Zakirkhodjaeva <
+f.zakirkhojaeva@rantsports.com> wrote:
+
+> Hello!
+>
+> My name is Feruza, and I am contacting you on behalf of Telecomasia.
+>
+>
+> Are you considering collaborating on the publication of third-party
+> articles on your website?
+>
+>
+> If so, I would like to hear your terms for this collaboration.
+>
+>
+> *Feruza Zokirkhujaeva | Content Manager, Telecomasia*
+>
+>
+
