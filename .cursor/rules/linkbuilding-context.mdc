@@ -1,0 +1,28 @@
+---
+description: Контекст Linkbuilding — маршрутизация документов в docs/ и learnings/
+globs: "{internal/seo/linkbuilding/**,seo/linkbuilding/**,linkbuilding/**}"
+alwaysApply: false
+---
+
+# Linkbuilding контекст
+
+При работе в `internal/seo/linkbuilding/` — активен контекст команды Linkbuilding.
+
+## Документирование
+
+При запросах на документирование, фиксацию знаний, соглашений, правил, инструкций или результатов тестов — использовать скилл **linkbuilding-docs-route** (`internal/seo/linkbuilding/.cursor/skills/linkbuilding-docs-route/SKILL.md`).
+
+Сотрудник не выбирает папку — агент определяет маршрут по Route Definitions скилла.
+
+## Структура
+
+- `docs/agreements/` — договорённости, зоны ответственности
+- `docs/rules/` — правила, конвенции
+- `docs/how-to/` — инструкции, процессы, чеклисты
+- `docs/inbox/` — неклассифицированное (fallback)
+- `learnings/` — результаты тестов, гипотезы, кейсы
+
+## Навигация
+
+- [docs/README.md](docs/README.md) — навигация по docs
+- [AGENTS.md](AGENTS.md) — контекст для AI
