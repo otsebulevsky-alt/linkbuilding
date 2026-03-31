@@ -55,20 +55,30 @@ _secrets_obj = _secrets()
 cfg = load_config(_secrets_obj)
 sa_info = load_service_account_info(_secrets_obj)
 _use_adc = use_google_adc(_secrets_obj)
-_SA_JSON_KEY = json.dumps(sa_info, sort_keys=True) if sa_info else ""
+try:
+    _SA_JSON_KEY = json.dumps(sa_info, sort_keys=True) if sa_info else ""
+except (TypeError, ValueError):
+    _SA_JSON_KEY = ""
 
 
 @st.cache_resource
 def sheets_service_cached(sa_json_key: str, use_adc: bool):
     if use_adc:
-        return build_sheets_service_adc()
+        try:
+            return build_sheets_service_adc()
+        except Exception:
+            return None
     if not sa_json_key:
         return None
     try:
         info = json.loads(sa_json_key)
     except json.JSONDecodeError:
         return None
-    return build_sheets_service(info)
+    try:
+        return build_sheets_service(info)
+    except Exception:
+        # Invalid key or google-auth build failure — avoid Streamlit Cloud "Oh no"
+        return None
 
 
 def load_registry_df(service, spreadsheet_id: str, gid: int) -> tuple[pd.DataFrame, str | None]:
@@ -129,11 +139,17 @@ def main():
         )
         st.stop()
     if not _use_adc and (not sa_info or svc is None):
-        st.error(
-            "Не задан сервисный аккаунт Google. Добавьте в Secrets ключ **GOOGLE_SERVICE_ACCOUNT_JSON** "
-            "(JSON целиком) и расшарьте таблицы на email сервисного аккаунта. "
-            "Если организация запрещает JSON-ключи — см. раздел «Ключ JSON создать нельзя» в README.md."
-        )
+        if sa_info and svc is None:
+            st.error(
+                "Не удалось создать клиент Google Sheets. Проверьте **GOOGLE_SERVICE_ACCOUNT_JSON** в Secrets: "
+                "валидный JSON сервисного аккаунта (поле `private_key` целиком, без обрезки), scope **Sheets API** в GCP."
+            )
+        else:
+            st.error(
+                "Не задан сервисный аккаунт Google. Добавьте в Secrets ключ **GOOGLE_SERVICE_ACCOUNT_JSON** "
+                "(JSON целиком) и расшарьте таблицы на email сервисного аккаунта. "
+                "Если организация запрещает JSON-ключи — см. раздел «Ключ JSON создать нельзя» в README.md."
+            )
         st.stop()
 
     tab_stats, tab_reg, tab_wait, tab_inbox, tab_calc, tab_pay = st.tabs(

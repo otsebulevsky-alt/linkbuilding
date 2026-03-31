@@ -141,8 +141,35 @@ def _load_sa_from_json_file(path: Path) -> dict | None:
     return None
 
 
+def _service_account_from_secrets_value(val: Any) -> dict | None:
+    """Streamlit Secrets may expose JSON as a string (TOML) or as a parsed dict."""
+    if val is None:
+        return None
+    if isinstance(val, dict):
+        if val.get("type") == "service_account":
+            return val
+        return None
+    if isinstance(val, str) and val.strip():
+        try:
+            data = json.loads(val)
+        except json.JSONDecodeError:
+            return None
+        if isinstance(data, dict) and data.get("type") == "service_account":
+            return data
+    return None
+
+
 def load_service_account_info(secrets: Any | None) -> dict | None:
     """Service account dict: secrets/env JSON string, then file paths (see order below)."""
+    if secrets is not None:
+        try:
+            inline = secrets.get("GOOGLE_SERVICE_ACCOUNT_JSON")
+        except Exception:
+            inline = None
+        got = _service_account_from_secrets_value(inline)
+        if got:
+            return got
+
     raw = _secrets_get(secrets, "GOOGLE_SERVICE_ACCOUNT_JSON", _env("GOOGLE_SERVICE_ACCOUNT_JSON", ""))
     if raw:
         try:
