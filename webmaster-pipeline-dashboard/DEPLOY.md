@@ -10,6 +10,7 @@
 | **GitHub** | Один аккаунт, с которым вы пушите и деплоите: в [GitHub → Emails](https://github.com/settings/emails) должна быть **подтверждена** почта **`o.tsebulevsky@rantsports.com`**. Не пушить в рабочий репозиторий с личного аккаунта с другим email — иначе **403** (как с `olegtseb9806`). |
 | **Streamlit Cloud** | Вход через **тот же** GitHub-аккаунт, что и для push (кнопка «Sign in with GitHub»). |
 | **Windows: сохранённые пароли** | «Параметры» → «Учётные данные» → удалить записи **`git:https://github.com`**, относящиеся к **чужим** логинам. Затем снова `git push` — авторизоваться аккаунтом с **rantsports**-почтой или [PAT](https://github.com/settings/tokens) для него. |
+| **Обход 403 на ПК** | В GitLab: **Settings → CI/CD → Variables** добавьте **`GITHUB_TOKEN`** (masked): [classic PAT](https://github.com/settings/tokens) GitHub с scope **repo**, созданный под аккаунтом **владельца** `github.com/otsebulevsky-alt/linkbuilding`. После пуша в GitLab job **`mirror_github_streamlit`** (см. `.gitlab-ci.yml`) отправит ветку на GitHub **без** локальных учётных данных Windows. |
 | **Секреты приложения** | `GOOGLE_SERVICE_ACCOUNT_JSON`, Gmail и т.д. — только из ваших локальных файлов / GCP, не пересылать в общий чат. |
 
 ---

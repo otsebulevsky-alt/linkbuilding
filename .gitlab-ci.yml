@@ -27,3 +27,21 @@ secret_detection:
   stage: secret-detection
 include:
 - template: Auto-DevOps.gitlab-ci.yml
+
+# Push current branch to GitHub (Streamlit Community Cloud reads only GitHub).
+# Set CI/CD variable GITHUB_TOKEN: classic PAT with "repo" scope (GitHub account that owns github.com/otsebulevsky-alt/linkbuilding).
+# Bypasses wrong Windows Credential Manager (403 as olegtseb9806).
+mirror_github_streamlit:
+  stage: deploy
+  image: alpine/git:latest
+  variables:
+    GIT_DEPTH: "0"
+  rules:
+    - if: $GITHUB_TOKEN
+  script:
+    - git config user.email "o.tsebulevsky@rantsports.com"
+    - git config user.name "Oleg Tsebulevsky"
+    - git fetch --unshallow 2>/dev/null || true
+    - git remote remove github 2>/dev/null || true
+    - git remote add github "https://oauth2:${GITHUB_TOKEN}@github.com/otsebulevsky-alt/linkbuilding.git"
+    - git push github "HEAD:refs/heads/${CI_COMMIT_REF_NAME}"
