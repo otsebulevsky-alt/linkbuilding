@@ -77,6 +77,32 @@ Windows: см. [README.md](README.md) — `run-daemon.ps1` / автозапус�
 
 ---
 
+## GitHub-зеркало для Streamlit (репозиторий должен существовать на github.com)
+
+Streamlit читает только GitHub. Репозиторий **`otsebulevsky-alt/linkbuilding`** нужно **создать вручную** (GitHub не позволяет ассистенту создать репо без вашего входа).
+
+**Уже сделано в локальном клоне** `linkbuilding` (если вы работаете из `C:\project\start\internal\seo\linkbuilding`):
+
+```text
+git remote add github https://github.com/otsebulevsky-alt/linkbuilding.git
+```
+
+(Если команда скажет `remote github already exists` — remote уже добавлен, идите дальше.)
+
+**Осталось только вам:**
+
+1. Откройте [github.com/new](https://github.com/new): **Owner** `otsebulevsky-alt`, **Repository name** `linkbuilding`, **без** README / .gitignore / license → **Create repository**.
+2. В PowerShell из папки репозитория `linkbuilding`:
+
+```powershell
+cd C:\project\start\internal\seo\linkbuilding
+git push -u github feature/seolb-164-webmaster-prospecting-oleg
+```
+
+3. Вернитесь на [share.streamlit.io/deploy](https://share.streamlit.io/deploy) и снова укажите `otsebulevsky-alt/linkbuilding` — ошибки «repository does not exist» пропадут.
+
+---
+
 ## Чеклист после деплоя
 
 - [ ] Таблицы Google расшарены на `client_email` из JSON.
