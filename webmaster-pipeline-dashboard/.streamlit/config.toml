@@ -1,8 +1,10 @@
-# Streamlit server (no secrets). Port matches common local bookmark.
+# Streamlit server (no secrets).
+# Do NOT set server.port or server.address here: Streamlit Community Cloud runs health checks
+# against the default bind; a custom port or 127.0.0.1-only breaks deployment.
+# Locally use run.ps1 / run-daemon.ps1 (8503 or 8504) or:
+#   py -m streamlit run app.py --server.port 8503 --server.address 127.0.0.1
 [server]
 headless = true
-port = 8503
-address = "127.0.0.1"
 
 [browser]
 gatherUsageStats = false

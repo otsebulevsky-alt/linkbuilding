@@ -200,6 +200,14 @@ git push -u github feature/seolb-164-webmaster-prospecting-oleg
 
 ---
 
+## Если Cloud: «Oh no» / «The service has encountered an error» сразу после «Processed dependencies»
+
+Частая причина: в [`.streamlit/config.toml`](.streamlit/config.toml) заданы **`server.port`** (например 8503) и/или **`server.address = "127.0.0.1"`**. Тогда процесс слушает «не тот» порт или только localhost — **health check** Streamlit Community Cloud не проходит. В репозитории оставляйте только безопасные опции (`headless`, `gatherUsageStats`); локальный порт **8503** — через [run.ps1](run.ps1).
+
+После исправления: **commit → push** на GitHub → в Cloud **Reboot** / **Redeploy**.
+
+---
+
 ## Чеклист после деплоя
 
 - [ ] Таблицы Google расшарены на `client_email` из JSON.

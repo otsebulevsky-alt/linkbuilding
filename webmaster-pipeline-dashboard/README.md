@@ -148,7 +148,7 @@ powershell -ExecutionPolicy Bypass -File C:\project\start\internal\seo\linkbuild
 
 Пока **включён ваш ПК**: можно не держать терминал открытым вручную — автозапуск при входе в Windows и перезапуск при падении процесса.
 
-1. Порт и режим заданы в [`.streamlit/config.toml`](.streamlit/config.toml) (по умолчанию **http://127.0.0.1:8503**).
+1. Локальный порт задаёт [run.ps1](run.ps1) / [run-daemon.ps1](run-daemon.ps1) (**8503**, при занятости — **8504**). В [`.streamlit/config.toml`](.streamlit/config.toml) **нет** `port`/`address` — иначе ломается деплой на Streamlit Community Cloud.
 2. Один раз из корня репозитория `start/`:
 
 ```text
