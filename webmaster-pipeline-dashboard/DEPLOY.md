@@ -1,6 +1,16 @@
 # Постоянный онлайн (24/7)
 
-Репозиторий кода: **GitLab** (`internal/seo/linkbuilding`). [Streamlit Community Cloud](https://streamlit.io/cloud) подключается **только к GitHub** — для него нужен зеркальный репозиторий или форк на GitHub.
+Репозиторий кода: **GitLab** (`internal/seo/linkbuilding`). [Streamlit Community Cloud](https://streamlit.io/cloud) подключается **только к GitHub** — для него нужен зеркальный репозиторий на GitHub.
+
+## Учётные записи Rantsports (канон)
+
+| Что | Правило |
+|-----|--------|
+| **Код и git** | Только из рабочего workspace. В репозитории `linkbuilding` задано: `user.email` = **`o.tsebulevsky@rantsports.com`**, `user.name` = **Oleg Tsebulevsky**. |
+| **GitHub** | Один аккаунт, с которым вы пушите и деплоите: в [GitHub → Emails](https://github.com/settings/emails) должна быть **подтверждена** почта **`o.tsebulevsky@rantsports.com`**. Не пушить в рабочий репозиторий с личного аккаунта с другим email — иначе **403** (как с `olegtseb9806`). |
+| **Streamlit Cloud** | Вход через **тот же** GitHub-аккаунт, что и для push (кнопка «Sign in with GitHub»). |
+| **Windows: сохранённые пароли** | «Параметры» → «Учётные данные» → удалить записи **`git:https://github.com`**, относящиеся к **чужим** логинам. Затем снова `git push` — авторизоваться аккаунтом с **rantsports**-почтой или [PAT](https://github.com/settings/tokens) для него. |
+| **Секреты приложения** | `GOOGLE_SERVICE_ACCOUNT_JSON`, Gmail и т.д. — только из ваших локальных файлов / GCP, не пересылать в общий чат. |
 
 ---
 
@@ -77,29 +87,35 @@ Windows: см. [README.md](README.md) — `run-daemon.ps1` / автозапус�
 
 ---
 
-## GitHub-зеркало для Streamlit (репозиторий должен существовать на github.com)
+## GitHub-зеркало для Streamlit (репозиторий на github.com)
 
-Streamlit читает только GitHub. Репозиторий **`otsebulevsky-alt/linkbuilding`** нужно **создать вручную** (GitHub не позволяет ассистенту создать репо без вашего входа).
+Streamlit читает только GitHub. Имя репозитория: **`OWNER/linkbuilding`**, где **`OWNER`** — ваш GitHub-пользователь или организация, **под аккаунтом с рабочей почтой** (см. таблицу выше).
 
-**Уже сделано в локальном клоне** `linkbuilding` (если вы работаете из `C:\project\start\internal\seo\linkbuilding`):
+**Remote в локальном клоне** (подставьте свой `OWNER` при необходимости):
+
+```powershell
+git remote remove github 2>$null
+git remote add github https://github.com/OWNER/linkbuilding.git
+```
+
+Пример, если репозиторий создан как `otsebulevsky-alt/linkbuilding`:
 
 ```text
 git remote add github https://github.com/otsebulevsky-alt/linkbuilding.git
 ```
 
-(Если команда скажет `remote github already exists` — remote уже добавлен, идите дальше.)
+**Вручную (ассистент не может зайти в GitHub за вас):**
 
-**Осталось только вам:**
-
-1. Откройте [github.com/new](https://github.com/new): **Owner** `otsebulevsky-alt`, **Repository name** `linkbuilding`, **без** README / .gitignore / license → **Create repository**.
-2. В PowerShell из папки репозитория `linkbuilding`:
+1. [github.com/new](https://github.com/new) — Owner = аккаунт с **`o.tsebulevsky@rantsports.com`**, имя репо **`linkbuilding`**, без README.
+2. Убедиться, что **git push** идёт **не** с личного аккаунта (см. 403 выше).
+3. PowerShell:
 
 ```powershell
 cd C:\project\start\internal\seo\linkbuilding
 git push -u github feature/seolb-164-webmaster-prospecting-oleg
 ```
 
-3. Вернитесь на [share.streamlit.io/deploy](https://share.streamlit.io/deploy) и снова укажите `otsebulevsky-alt/linkbuilding` — ошибки «repository does not exist» пропадут.
+4. [share.streamlit.io/deploy](https://share.streamlit.io/deploy) — **Repository:** `OWNER/linkbuilding`, **Branch:** `feature/seolb-164-webmaster-prospecting-oleg`, **Main file path:** `webmaster-pipeline-dashboard/app.py`, при необходимости **App root:** `webmaster-pipeline-dashboard`.
 
 ---
 
@@ -109,4 +125,4 @@ git push -u github feature/seolb-164-webmaster-prospecting-oleg
 - [ ] В облаке задан `GOOGLE_SERVICE_ACCOUNT_JSON` (или эквивалент через env в Docker).
 - [ ] Книга «Возможности оплаты» (`17MoDWn…`) открыта для SA, если нужна вкладка «Варианты оплаты».
 
-**Последнее обновление:** 2026-03-31
+**Последнее обновление:** 2026-03-31 (политика учётных записей Rantsports)
