@@ -4,10 +4,23 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Continue'
 Set-Location -LiteralPath $PSScriptRoot
 Write-Host "Webmaster pipeline dashboard daemon. Stop: close this window or End Task."
-Write-Host "Open: http://localhost:8503"
+
+$preferred = 8503
+$port = $preferred
+try {
+    $inUse = Get-NetTCPConnection -LocalPort $preferred -State Listen -ErrorAction SilentlyContinue
+} catch {
+    $inUse = $null
+}
+if ($inUse) {
+    Write-Host "Port $preferred in use, using 8504..."
+    $port = 8504
+}
+Write-Host "Open: http://127.0.0.1:$port"
+
 while ($true) {
     try {
-        & py -m streamlit run app.py
+        & py -m streamlit run app.py --server.port $port --server.address 127.0.0.1
     } catch {
         Write-Host "Streamlit error, restarting in 5s..."
     }

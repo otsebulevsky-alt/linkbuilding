@@ -55,6 +55,9 @@ def get_sheet_title_by_gid(service, spreadsheet_id: str, gid: int) -> str | None
             return props0.get("title")
     except HttpError:
         return None
+    except Exception:
+        # SSL, timeouts, google.auth refresh errors — do not crash Streamlit UI
+        return None
     return None
 
 
@@ -137,12 +140,17 @@ def resolve_cost_column(df: pd.DataFrame, primary: str) -> str | None:
 
 def get_values_as_dataframe(service, spreadsheet_id: str, range_a1: str) -> pd.DataFrame:
     """First row = header."""
-    result = (
-        service.spreadsheets()
-        .values()
-        .get(spreadsheetId=spreadsheet_id, range=range_a1, majorDimension="ROWS")
-        .execute()
-    )
+    try:
+        result = (
+            service.spreadsheets()
+            .values()
+            .get(spreadsheetId=spreadsheet_id, range=range_a1, majorDimension="ROWS")
+            .execute()
+        )
+    except HttpError:
+        return pd.DataFrame()
+    except Exception:
+        return pd.DataFrame()
     rows = result.get("values") or []
     if not rows:
         return pd.DataFrame()

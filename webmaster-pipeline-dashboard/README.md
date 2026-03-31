@@ -4,6 +4,14 @@
 
 Код: `app.py`, модули в `lib/`.
 
+### Как задумывалось в документах HACK-382 (без GitLab CI и зеркала)
+
+Первоисточник: [implementation-notes](../../../../shared-docs/events/2026-03-30_ai-hackaton/results/hack-382/implementation-notes.md) (раздел **«Вариант E — Streamlit»**), кратко [README hack-382](../../../../shared-docs/events/2026-03-30_ai-hackaton/results/hack-382/README.md). Там панель = **Python Streamlit** + ключи в **Secrets**, деплой в облако — **опция** ([Streamlit Community Cloud](https://streamlit.io/cloud) или Cloud Run), а не обязательный GitLab → GitHub pipeline.
+
+**Рабочий минимум сейчас:** папка `webmaster-pipeline-dashboard/` + `.streamlit/secrets.toml` + `.streamlit/gcp-service-account.json` → локальный запуск (**[Шаг 4](#шаг-4-локальный-запуск)** ниже) или [SETUP.md](SETUP.md). Этого достаточно, чтобы «продолжить логику и вёрстку».
+
+**Постоянный URL в интернете (24/7)** — отдельный необязательный слой: [DEPLOY.md](DEPLOY.md) (в т.ч. зеркало GitHub, если понадобится Streamlit Cloud).
+
 ### Где лежит ключ Google (канон)
 
 **Выбранный вариант:** один файл **`.streamlit/gcp-service-account.json`** + в `secrets.toml` строка  
@@ -104,7 +112,15 @@ py -m streamlit run app.py
 powershell -ExecutionPolicy Bypass -File C:\project\start\internal\seo\linkbuilding\webmaster-pipeline-dashboard\run.ps1
 ```
 
-Скрипт [run.ps1](run.ps1) сам делает `cd` в папку с `app.py`.
+Скрипт [run.ps1](run.ps1) сам делает `cd` в папку с `app.py` и, если порт **8503** уже занят (часто второй экземпляр Streamlit), автоматически пробует **8504** — смотрите строку `Streamlit URL:` в консоли.
+
+#### Локально: частые сбои
+
+| Симптом | Что сделать |
+|--------|-------------|
+| **`Port 8503 is not available`** | Закройте старый Streamlit в другом окне или в диспетчере задач (процесс `python` / Streamlit), либо запустите снова [run.ps1](run.ps1) — он переключится на 8504. |
+| **`git push` на GitHub → 403, denied to другой логин** | Windows отдаёт GitHub сохранённый логин не того аккаунта. Удалите учётные данные для `git:https://github.com` в «Параметры → Учётные данные», затем снова `git push` и войдите под **владельцем** репозитория или используйте PAT. Подробно: [DEPLOY.md](DEPLOY.md) (таблица «Учётные записи Rantsports»). |
+| **Красный traceback в браузере при загрузке таблицы** | Обновите страницу после исправления сети/VPN; при 403 к таблице — расшарьте книгу на email сервисного аккаунта (см. шаг 2). Код больше не падает на сетевых ошибках API — при сбое лист может отобразиться пустым, смотрите **Диагностика**. |
 
 ### Постоянный доступ 24/7 (рекомендуется: облако)
 
