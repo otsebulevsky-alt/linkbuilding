@@ -146,9 +146,12 @@ def main():
             )
         else:
             st.error(
-                "Не задан сервисный аккаунт Google. Добавьте в Secrets ключ **GOOGLE_SERVICE_ACCOUNT_JSON** "
-                "(JSON целиком) и расшарьте таблицы на email сервисного аккаунта. "
-                "Если организация запрещает JSON-ключи — см. раздел «Ключ JSON создать нельзя» в README.md."
+                "Не задан сервисный аккаунт Google для облака. "
+                "**Streamlit Cloud:** Manage app (или ⋮) → **Settings** → **Secrets** → вставьте TOML с ключом "
+                "**`GOOGLE_SERVICE_ACCOUNT_JSON`** (весь JSON в тройных кавычках `'''...'''`), **Save** → **Reboot app**. "
+                "Локально сгенерировать блок: `py scripts/print_streamlit_cloud_secrets_snippet.py` в папке приложения. "
+                "Таблицы расшарьте на email из поля **`client_email`** в JSON. "
+                "Если организация запрещает JSON-ключи — см. README.md, раздел «Ключ JSON создать нельзя»."
             )
         st.stop()
 

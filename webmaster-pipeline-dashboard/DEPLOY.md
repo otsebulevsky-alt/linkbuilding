@@ -74,11 +74,13 @@ Job **`mirror_github_streamlit`** в [`.gitlab-ci.yml`](../.gitlab-ci.yml) вы�
 ### Этап G. Streamlit — Secrets (Google и опции)
 
 1. В карточке приложения: **⋮** (три точки) → **Settings** → **Secrets**.
-2. Вставьте TOML. Обязательно для Sheets API в облаке:
+2. **Быстро собрать блок на ПК** (не отправляйте вывод в чат): из папки `webmaster-pipeline-dashboard` выполните  
+   `py scripts/print_streamlit_cloud_secrets_snippet.py` — скопируйте вывод целиком в поле Secrets.
+3. Вставьте TOML. Обязательно для Sheets API в облаке:
    - **`GOOGLE_SERVICE_ACCOUNT_JSON`** = весь JSON сервисного аккаунта из вашего локального файла ключа (как в [secrets.toml.example](secrets.toml.example)), в тройных кавычках `''' ... '''`.
    - **Не** используйте в облаке `GOOGLE_SERVICE_ACCOUNT_FILE` (файла ключа там нет).
-3. Добавьте строки из локального `.streamlit/secrets.toml`, которые вам нужны: `LINKBUILDER_FILTER`, `LINKBUILDER_ALIASES`, при необходимости `GMAIL_*`, `SPREADSHEET_*`, `GID_*` — по образцу [secrets.toml.example](secrets.toml.example).
-4. **Save** → **Reboot app** (или аналог в интерфейсе).
+4. Добавьте строки из локального `.streamlit/secrets.toml`, которые вам нужны: `LINKBUILDER_FILTER`, `LINKBUILDER_ALIASES`, при необходимости `GMAIL_*`, `SPREADSHEET_*`, `GID_*` — по образцу [secrets.toml.example](secrets.toml.example) (скрипт выше уже добавляет `LINKBUILDER_*` по умолчанию).
+5. **Save** → **Reboot app** (или аналог в интерфейсе).
 
 ### Этап H. Проверка приложения
 

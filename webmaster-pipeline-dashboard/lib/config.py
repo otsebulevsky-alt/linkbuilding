@@ -49,11 +49,32 @@ class AppConfig:
     linkbuilder_aliases: list[str]
 
 
+def _secrets_lookup_raw(secrets: Any, key: str) -> Any:
+    """Streamlit versions differ: prefer __getitem__, then .get(), then attribute."""
+    if secrets is None:
+        return None
+    try:
+        return secrets[key]
+    except Exception:
+        pass
+    try:
+        return secrets.get(key)
+    except Exception:
+        pass
+    try:
+        return getattr(secrets, key, None)
+    except Exception:
+        return None
+    return None
+
+
 def _secrets_get(secrets: Any, key: str, default: str = "") -> str:
     try:
         if secrets is None:
             return default
-        v = secrets.get(key, default)
+        v = _secrets_lookup_raw(secrets, key)
+        if v is None:
+            v = default
         return str(v).strip() if v is not None else default
     except Exception:
         return default
@@ -160,17 +181,20 @@ def _service_account_from_secrets_value(val: Any) -> dict | None:
 
 
 def load_service_account_info(secrets: Any | None) -> dict | None:
-    """Service account dict: secrets/env JSON string, then file paths (see order below)."""
+    """Service account dict: env, Streamlit secrets, then file paths (see order below)."""
+    env_inline = _env("GOOGLE_SERVICE_ACCOUNT_JSON", "")
+    if env_inline:
+        got = _service_account_from_secrets_value(env_inline)
+        if got:
+            return got
+
     if secrets is not None:
-        try:
-            inline = secrets.get("GOOGLE_SERVICE_ACCOUNT_JSON")
-        except Exception:
-            inline = None
+        inline = _secrets_lookup_raw(secrets, "GOOGLE_SERVICE_ACCOUNT_JSON")
         got = _service_account_from_secrets_value(inline)
         if got:
             return got
 
-    raw = _secrets_get(secrets, "GOOGLE_SERVICE_ACCOUNT_JSON", _env("GOOGLE_SERVICE_ACCOUNT_JSON", ""))
+    raw = _secrets_get(secrets, "GOOGLE_SERVICE_ACCOUNT_JSON", "")
     if raw:
         try:
             return json.loads(raw)
