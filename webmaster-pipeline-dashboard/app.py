@@ -155,6 +155,45 @@ def main():
             )
         st.stop()
 
+    def _quick_notify(msg: str) -> None:
+        try:
+            st.toast(msg, icon="✅")
+        except Exception:
+            st.info(msg)
+
+    st.markdown(
+        """
+        <style>
+        div[data-testid="stHorizontalBlock"]:has(> div:nth-child(4)) button[kind="primary"] {
+            width: 100% !important;
+            font-weight: 600 !important;
+            padding-top: 0.55rem !important;
+            padding-bottom: 0.55rem !important;
+            background: linear-gradient(180deg, #ff6b6b 0%, #ee5a6f 100%) !important;
+            border: 1px solid #e03131 !important;
+            color: #ffffff !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    qa1, qa2, qa3, qa4 = st.columns(4, gap="small")
+    with qa1:
+        if st.button("Прочитать почту", key="qa_mail", use_container_width=True, type="primary"):
+            _quick_notify(
+                "Вкладка «Входящие (IMAP)» → «Загрузить непрочитанные»."
+            )
+    with qa2:
+        if st.button("торг", key="qa_trade", use_container_width=True, type="primary"):
+            _quick_notify("Сценарий «торг» — заготовка; логику можно добавить позже.")
+    with qa3:
+        if st.button("отправить статьи", key="qa_send", use_container_width=True, type="primary"):
+            _quick_notify("Вкладка «Жду публикации → отправка» — выбор строки и отправка письма.")
+    with qa4:
+        if st.button("проверка публикаций", key="qa_check", use_container_width=True, type="primary"):
+            _quick_notify("Проверка публикаций — заготовка; позже: сверка статусов с реестром.")
+    st.divider()
+
     tab_stats, tab_reg, tab_wait, tab_inbox, tab_calc, tab_pay = st.tabs(
         (
             "Статистика",
