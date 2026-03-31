@@ -15,6 +15,86 @@
 
 ---
 
+## Пошагово: ваши действия (максимально подробно)
+
+Ниже — порядок, который приводит к **зеркалу кода на GitHub** (через GitLab CI) и к **постоянному URL на Streamlit**. Предполагается: репозиторий GitHub **`otsebulevsky-alt/linkbuilding`** уже [создан пустым](https://github.com/new), ветка с кодом в GitLab — **`feature/seolb-164-webmaster-prospecting-oleg`**.
+
+### Этап A. GitHub — почта и репозиторий
+
+1. Войдите на [github.com](https://github.com) под аккаунтом **`otsebulevsky-alt`** (или тем, кто **владелец** репозитория `linkbuilding`).
+2. Откройте [github.com/settings/emails](https://github.com/settings/emails).
+3. Убедитесь, что **`o.tsebulevsky@rantsports.com`** есть в списке и статус **Verified**. Если нет — добавьте письмо, перейдите по ссылке из письма, при необходимости сделайте эту почту **Primary** для рабочих репозиториев.
+4. Откройте [github.com/otsebulevsky-alt/linkbuilding](https://github.com/otsebulevsky-alt/linkbuilding). Если репозитория нет — [создайте](https://github.com/new): имя **`linkbuilding`**, **без** README / .gitignore / license → **Create repository**.
+
+### Этап B. GitHub — Personal Access Token (для GitLab CI)
+
+1. Откройте [github.com/settings/tokens](https://github.com/settings/tokens) → **Generate new token** → выберите **Generate new token (classic)**.
+2. **Note:** например `gitlab-mirror-linkbuilding`.
+3. **Expiration:** по политике компании (например 90 дней или No expiration, если разрешено).
+4. Отметьте scope **`repo`** (полный доступ к репозиториям — нужен для `git push`).
+5. **Generate token** — **сразу скопируйте** строку токена (потом её не покажут). Храните как пароль; **не** вставляйте в общий чат.
+
+### Этап C. GitLab — переменная CI/CD
+
+1. Откройте проект в GitLab: **ai-first-workspace / internal / seo / linkbuilding** (URL вида `rantsports.gitlab.yandexcloud.net/.../linkbuilding`).
+2. Слева: **Settings** → **CI/CD**.
+3. Разверните **Variables** → **Expand**.
+4. **Add variable**:
+   - **Key:** `GITHUB_TOKEN`
+   - **Value:** вставьте токен из этапа B (одной строкой).
+   - Включите **Mask variable** (и при необходимости **Protect variable**, если хотите, чтобы токен использовался только на защищённых ветках — тогда ветку нужно пометить как protected или снять флаг).
+5. **Add variable**.
+
+### Этап D. Запуск пайплайна с job зеркалирования
+
+Job **`mirror_github_streamlit`** в [`.gitlab-ci.yml`](../.gitlab-ci.yml) выполняется **только если** задана переменная **`GITHUB_TOKEN`**.
+
+1. Убедитесь, что последний коммит с `.gitlab-ci.yml` есть в вашей ветке (у вас уже пушили в `feature/seolb-164-webmaster-prospecting-oleg`).
+2. Сделайте любой **новый коммит** в эту ветку **или** в GitLab: **CI/CD → Pipelines → Run pipeline** → выберите ветку **`feature/seolb-164-webmaster-prospecting-oleg`** → **Run pipeline**.
+3. Откройте запущенный pipeline → дождитесь стадии **deploy** → job **`mirror_github_streamlit`**.
+4. Если job **зелёная** — ветка отправлена на GitHub. Если **красная** — откройте лог job: частые причины — неверный токен, нет прав `repo`, репозиторий GitHub не существует или переименован.
+
+### Этап E. Проверка GitHub
+
+1. Откройте [github.com/otsebulevsky-alt/linkbuilding](https://github.com/otsebulevsky-alt/linkbuilding).
+2. Должна отображаться ветка **`feature/seolb-164-webmaster-prospecting-oleg`** и папка **`webmaster-pipeline-dashboard`** с файлами (`app.py`, `requirements.txt` и т.д.).
+
+### Этап F. Streamlit Community Cloud — деплой
+
+1. Войдите на [share.streamlit.io](https://share.streamlit.io) **тем же GitHub-аккаунтом**, что владеет репозиторием (через **Sign in with GitHub**).
+2. **Мои приложения** → **Создать приложение** / **Deploy a public app from GitHub** → **Deploy now**.
+3. Заполните форму [share.streamlit.io/deploy](https://share.streamlit.io/deploy):
+   - **Repository:** `otsebulevsky-alt/linkbuilding`
+   - **Branch:** `feature/seolb-164-webmaster-prospecting-oleg`
+   - **Main file path:** `webmaster-pipeline-dashboard/app.py`
+   - **App URL (optional):** любое свободное имя (например `linkbuilding-webmaster`).
+   - **Advanced settings** (если есть): **Main module directory** / **App root** = `webmaster-pipeline-dashboard`
+4. **Deploy**. Дождитесь окончания сборки (логи на экране). При ошибке импорта проверьте, что путь к `app.py` и root совпадают с пунктами выше.
+
+### Этап G. Streamlit — Secrets (Google и опции)
+
+1. В карточке приложения: **⋮** (три точки) → **Settings** → **Secrets**.
+2. Вставьте TOML. Обязательно для Sheets API в облаке:
+   - **`GOOGLE_SERVICE_ACCOUNT_JSON`** = весь JSON сервисного аккаунта из вашего локального файла ключа (как в [secrets.toml.example](secrets.toml.example)), в тройных кавычках `''' ... '''`.
+   - **Не** используйте в облаке `GOOGLE_SERVICE_ACCOUNT_FILE` (файла ключа там нет).
+3. Добавьте строки из локального `.streamlit/secrets.toml`, которые вам нужны: `LINKBUILDER_FILTER`, `LINKBUILDER_ALIASES`, при необходимости `GMAIL_*`, `SPREADSHEET_*`, `GID_*` — по образцу [secrets.toml.example](secrets.toml.example).
+4. **Save** → **Reboot app** (или аналог в интерфейсе).
+
+### Этап H. Проверка приложения
+
+1. Откройте выданный URL вида `https://<имя>.streamlit.app`.
+2. Должны открыться вкладки панели; данные из Google Sheets подтянутся, если таблицы расшарены на **`client_email`** из JSON и Secrets сохранены без ошибок.
+
+### Опционально: локальный `git push` на GitHub с ПК (без CI)
+
+Если хотите пушить с Windows без GitLab job:
+
+1. **Параметры** → **Учётные данные** → **Диспетчер учётных данных** → удалите старые записи **`git:https://github.com`** для чужого аккаунта.
+2. В PowerShell: `cd C:\project\start\internal\seo\linkbuilding` → `git push -u github feature/seolb-164-webmaster-prospecting-oleg`.
+3. При запросе пароля используйте **PAT** (этап B), логин — **`otsebulevsky-alt`**.
+
+---
+
 ## Вариант 1 — Streamlit Community Cloud (бесплатный хостинг Streamlit)
 
 ### Перед кнопкой «Создать приложение»
