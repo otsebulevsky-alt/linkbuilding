@@ -23,7 +23,7 @@ import pandas as pd
 import streamlit as st
 from googleapiclient.errors import HttpError
 
-from lib.config import load_config, load_service_account_info, use_google_adc
+from lib.config import _secrets_get, _secrets_get_int, load_config, load_service_account_info, use_google_adc
 from lib.mail_imap import fetch_unread_summaries
 from lib.mail_smtp import send_smtp_html
 from lib.webmaster_inbox_sync import sync_unseen_webmasters_to_inbox_sheet
@@ -43,7 +43,7 @@ from lib.sheets_service import (
 )
 
 # Меняйте при каждом релизе UI — в подписи под заголовком видно, что Cloud подтянул новый код.
-PANEL_UI_BUILD = "mail-ui-2026-04-02a"
+PANEL_UI_BUILD = "mail-ui-2026-04-02b"
 
 st.set_page_config(
     page_title="Linkbuilding — панель вебмастеров",
@@ -60,23 +60,24 @@ def _secrets():
 
 
 def _gmail_imap_credentials(secrets_obj):
-    """Gmail IMAP: dedicated keys or same as SMTP (app password)."""
-    s = secrets_obj or {}
-    user = str(s.get("GMAIL_IMAP_USER", "") or s.get("GMAIL_SMTP_USER", "") or "").strip()
-    password = str(s.get("GMAIL_IMAP_APP_PASSWORD", "") or s.get("GMAIL_SMTP_APP_PASSWORD", "") or "").strip()
+    """Gmail IMAP: dedicated keys or same as SMTP (app password).
+
+    Не использовать `secrets_obj or {}` и прямой `.get()` на st.secrets: при отсутствии Secrets
+    Streamlit бросает StreamlitSecretNotFoundError. Чтение — через lib.config._secrets_get.
+    """
+    user = (_secrets_get(secrets_obj, "GMAIL_IMAP_USER") or _secrets_get(secrets_obj, "GMAIL_SMTP_USER")).strip()
+    password = (
+        _secrets_get(secrets_obj, "GMAIL_IMAP_APP_PASSWORD") or _secrets_get(secrets_obj, "GMAIL_SMTP_APP_PASSWORD")
+    ).strip()
     return user, password
 
 
 def _gmail_smtp_settings(secrets_obj):
     """SMTP для автоответа про оплату и вкладки «Жду публикации»."""
-    s = secrets_obj or {}
-    user = str(s.get("GMAIL_SMTP_USER", "") or "").strip()
-    password = str(s.get("GMAIL_SMTP_APP_PASSWORD", "") or "").strip()
-    host = str(s.get("GMAIL_SMTP_HOST", "smtp.gmail.com") or "smtp.gmail.com").strip()
-    try:
-        port = int(s.get("GMAIL_SMTP_PORT", 587))
-    except (TypeError, ValueError):
-        port = 587
+    user = _secrets_get(secrets_obj, "GMAIL_SMTP_USER").strip()
+    password = _secrets_get(secrets_obj, "GMAIL_SMTP_APP_PASSWORD").strip()
+    host = (_secrets_get(secrets_obj, "GMAIL_SMTP_HOST", "smtp.gmail.com") or "smtp.gmail.com").strip()
+    port = _secrets_get_int(secrets_obj, "GMAIL_SMTP_PORT", 587)
     return host, port, user, password
 
 
