@@ -60,7 +60,7 @@ class AppConfig:
     imap_sync_timeout_sec: int
     # UNSEEN: сначала более новые по номеру последовательности IMAP (как правило ближе к верху Gmail)
     imap_sync_newest_first: bool
-    # После записи в таблицу: один раз на письмо отправить SMTP с текстом колонки F (уточнение про оплату)
+    # После записи в таблицу: по умолчанию один раз на письмо отправить SMTP с текстом колонки F (логика оплаты)
     imap_auto_reply_payment_followup: bool
 
     # Extra substrings to match Linkbuilder column (e.g. Oleg vs Олег)
@@ -196,7 +196,7 @@ def load_config(secrets: Any | None = None) -> AppConfig:
         imap_auto_reply_payment_followup=_secrets_get_bool(
             secrets,
             "IMAP_AUTO_REPLY_PAYMENT_FOLLOWUP",
-            _env_bool("IMAP_AUTO_REPLY_PAYMENT_FOLLOWUP", False),
+            _env_bool("IMAP_AUTO_REPLY_PAYMENT_FOLLOWUP", True),
         ),
         linkbuilder_aliases=_parse_list_csv(
             secrets,
