@@ -45,3 +45,9 @@ mirror_github_streamlit:
     - git remote remove github 2>/dev/null || true
     - git remote add github "https://oauth2:${GITHUB_TOKEN}@github.com/otsebulevsky-alt/linkbuilding.git"
     - git push github "HEAD:refs/heads/${CI_COMMIT_REF_NAME}"
+
+# Auto-DevOps.gitlab-ci.yml задаёт workflow:rules без web/push на feature — GitLab пишет
+# «Pipeline cannot be run. Review the workflow:rules». Этот блок идёт после include и переопределяет workflow.
+workflow:
+  rules:
+    - when: always
