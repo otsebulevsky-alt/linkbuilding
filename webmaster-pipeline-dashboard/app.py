@@ -43,7 +43,7 @@ from lib.sheets_service import (
 )
 
 # Меняйте при каждом релизе UI — в подписи под заголовком видно, что Cloud подтянул новый код.
-PANEL_UI_BUILD = "mail-ui-2026-04-01g"
+PANEL_UI_BUILD = "mail-ui-2026-04-02a"
 
 st.set_page_config(
     page_title="Linkbuilding — панель вебмастеров",
@@ -92,24 +92,39 @@ def _normalize_session_email_override() -> str:
     return s
 
 
+def _session_stored_mail_password() -> str:
+    """Пароль приложения, введённый в этой вкладке (не пишется в Secrets)."""
+    try:
+        v = st.session_state.get("mail_session_app_password", "")
+    except Exception:
+        return ""
+    if v is None:
+        return ""
+    return str(v).strip()
+
+
 def _effective_gmail_imap_credentials(secrets_obj):
     u, p = _gmail_imap_credentials(secrets_obj)
     ov = _normalize_session_email_override()
     if ov:
-        return ov, p
+        u = ov
+    pw_sess = _session_stored_mail_password()
+    if pw_sess:
+        p = pw_sess
     return u, p
 
 
 def _effective_gmail_smtp_settings(secrets_obj):
     host, port, user, password = _gmail_smtp_settings(secrets_obj)
     ov = _normalize_session_email_override()
-    if ov:
-        return host, port, ov, password
-    return host, port, user, password
+    eff_user = ov if ov else user
+    pw_sess = _session_stored_mail_password()
+    eff_pw = pw_sess if pw_sess else password
+    return host, port, eff_user, eff_pw
 
 
 def _mail_ready_effective(secrets_obj) -> tuple[str, bool]:
-    """(эффективный email, хватает ли секретов для IMAP: логин + пароль из Secrets)."""
+    """(эффективный email, достаточно ли логина + пароля: Secrets и/или сессия)."""
     u, p = _effective_gmail_imap_credentials(secrets_obj)
     return (u, bool(u and p))
 
@@ -197,49 +212,61 @@ def registry_diagnostics(
 
 
 def _render_mail_change_panel(secrets_mail_user: str, secrets_have_mail_password: bool) -> None:
-    """Одно поле: вставить почту; IMAP/SMTP используют её + пароль и серверы из Secrets."""
+    """Адрес + опционально пароль приложения в сессии; IMAP/SMTP без обязательного Secrets для пароля."""
     st.markdown("---")
-    st.subheader("Сменить почту в этой сессии")
+    st.subheader("Почта для этой сессии")
     ov = _normalize_session_email_override()
+    sess_pw = _session_stored_mail_password()
     if ov:
-        st.success(f"Сейчас подставляется: **{html.escape(ov)}** (пароль приложения — из Secrets).")
+        src = "Secrets + сессия" if secrets_have_mail_password and sess_pw else ("сессия" if sess_pw else "Secrets")
+        st.success(f"Логин: **{html.escape(ov)}** · пароль: **{src}**.")
     elif secrets_mail_user:
-        st.caption(f"По умолчанию из Secrets: `{html.escape(secrets_mail_user)}`")
-    hint = (
-        "Вставьте адрес и нажмите **Применить**. Пароль приложения и серверы почты берутся из **Secrets** без изменений. "
-        "Если это **другой** аккаунт Google — сначала сохраните для него пароль приложения в "
-        "[Secrets приложения](https://share.streamlit.io) (**Manage app → Settings → Secrets**), затем примените адрес здесь."
-    )
-    st.caption(hint)
+        st.caption(f"Логин из Secrets: `{html.escape(secrets_mail_user)}`")
+    if not secrets_have_mail_password:
+        st.info(
+            "В **Secrets** нет пароля приложения — введите **пароль приложения Google** ниже. "
+            "Он хранится **только в этой вкладке браузера** (до закрытия / Reboot). Для постоянного варианта добавьте "
+            "**GMAIL_SMTP_APP_PASSWORD** в [Settings → Secrets](https://share.streamlit.io)."
+        )
+    else:
+        st.caption(
+            "Пароль уже есть в **Secrets**. Ниже можно временно подставить другой (на сессию) или оставить пустым."
+        )
 
     cur = ov or (secrets_mail_user or "")
     with st.form("mail_session_override_form"):
         new_mail = st.text_input(
-            "Адрес почты",
+            "Адрес почты (логин Gmail)",
             value=cur,
-            placeholder="paste@example.com",
-            help="Только логин; пароль не меняется (остаётся из Secrets).",
+            placeholder="name@company.com",
+        )
+        app_pw = st.text_input(
+            "Пароль приложения Google (16 символов)",
+            type="password",
+            placeholder="" if secrets_have_mail_password else "обязательно, если нет в Secrets",
+            help="Не пароль от аккаунта Google. Создать: Google → Безопасность → пароли приложений.",
         )
         c1, c2, c3 = st.columns(3)
         apply_b = c1.form_submit_button("Применить", type="primary")
-        reset_b = c2.form_submit_button("Как в Secrets")
+        reset_b = c2.form_submit_button("Сбросить сессию")
         close_b = c3.form_submit_button("Закрыть")
 
     if apply_b:
         candidate = (new_mail or "").strip()
+        pw_field = (app_pw or "").strip()
         if not _looks_like_email(candidate):
             st.error("Введите корректный email (например name@company.com).")
-        elif not secrets_have_mail_password:
-            st.error(
-                "В Secrets нет пароля приложения. Задайте **GMAIL_SMTP_APP_PASSWORD** или **GMAIL_IMAP_APP_PASSWORD**, "
-                "затем снова откройте «Сменить почту»."
-            )
+        elif not secrets_have_mail_password and not pw_field and not sess_pw:
+            st.error("Нужен пароль приложения: введите в поле выше или задайте **GMAIL_SMTP_APP_PASSWORD** в Secrets.")
         else:
             st.session_state.mail_email_override = candidate
+            if pw_field:
+                st.session_state.mail_session_app_password = pw_field
             st.session_state.mail_settings_panel = False
             st.rerun()
     elif reset_b:
         st.session_state.mail_email_override = ""
+        st.session_state.mail_session_app_password = ""
         st.session_state.mail_settings_panel = False
         st.rerun()
     elif close_b:
@@ -263,6 +290,7 @@ def main():
     secrets_have_mail_password = bool(secrets_mail_p)
     mail_addr, mail_ok = _mail_ready_effective(_secrets_obj)
     session_ov = _normalize_session_email_override()
+    sess_pw_active = bool(_session_stored_mail_password())
 
     # Сайдбар — только статус; «Сменить почту» — справа от заголовка страницы.
     with st.sidebar:
@@ -270,14 +298,16 @@ def main():
         if mail_ok:
             st.success(html.escape(mail_addr))
             if session_ov:
-                st.caption("Логин подменён в сессии; пароль из Secrets.")
+                st.caption("Логин задан в сессии.")
+            if sess_pw_active and not secrets_have_mail_password:
+                st.caption("Пароль приложения только в этой вкладке; для постоянного — Secrets.")
         elif session_ov:
             st.warning(
-                f"Подмена `{html.escape(session_ov)}` — в Secrets нет пароля приложения, почта не работает."
+                f"Логин `{html.escape(session_ov)}` — укажите пароль приложения в форме «Сменить почту» или в Secrets."
             )
         else:
-            st.warning("Не задана в Secrets")
-        st.caption("Смена адреса на сессию — кнопка справа от заголовка «Панель линкбилдинга».")
+            st.warning("Нет логина/пароля — откройте «Сменить почту» справа от заголовка.")
+        st.caption("Смена логина/пароля на сессию — кнопка справа от «Панель линкбилдинга».")
 
     # Заголовок + «Сменить почту» в одной строке (markdown # — чтобы темы Streamlit не съедали колонку).
     row_title, row_mail = st.columns([22, 3.4], gap="small")
@@ -287,16 +317,18 @@ def main():
         if st.button("Сменить почту", key="hdr_change_mail", type="primary", use_container_width=True):
             st.session_state.mail_settings_panel = not st.session_state.mail_settings_panel
 
-    if session_ov and mail_ok:
-        mail_line = f"**Почта (сессия):** `{html.escape(mail_addr)}` · пароль из Secrets"
+    if mail_ok and sess_pw_active and not secrets_have_mail_password:
+        mail_line = f"**Почта:** `{html.escape(mail_addr)}` · пароль **в сессии** (вкладка браузера)"
+    elif session_ov and mail_ok:
+        mail_line = f"**Почта (сессия):** `{html.escape(mail_addr)}` · пароль из Secrets или сессии"
     elif session_ov:
         mail_line = (
-            f"**Подмена:** `{html.escape(session_ov)}` — добавьте **GMAIL_SMTP_APP_PASSWORD** или **GMAIL_IMAP_APP_PASSWORD** в Secrets"
+            f"**Логин (сессия):** `{html.escape(session_ov)}` — нужен пароль приложения (форма «Сменить почту» или Secrets)"
         )
     elif mail_ok:
         mail_line = f"**Почта (Secrets):** `{html.escape(mail_addr)}`"
     else:
-        mail_line = "**Почта:** не задана в Secrets (нужен логин и пароль приложения)"
+        mail_line = "**Почта:** нажмите «Сменить почту» — логин + пароль приложения (можно без Secrets, только на сессию)"
     st.caption(
         f"`{PANEL_UI_BUILD}` · {mail_line} · Фильтр Linkbuilder: **{cfg.linkbuilder_filter}** · "
         f"Статусы: «{cfg.status_prep_text}», «{cfg.status_wait_publish}»"
