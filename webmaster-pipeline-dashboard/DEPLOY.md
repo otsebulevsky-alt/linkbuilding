@@ -70,7 +70,8 @@ Job **`mirror_github_streamlit`** в [`.gitlab-ci.yml`](../.gitlab-ci.yml) вы�
    - **Branch:** `feature/seolb-164-webmaster-prospecting-oleg`
    - **Main file path:** `app.py` **(корень репозитория)** или `webmaster-pipeline-dashboard/app.py` — в корне есть шим [`app.py`](../app.py), подключающий дашборд; в корне также [`requirements.txt`](../requirements.txt) (`-r webmaster-pipeline-dashboard/...`), чтобы Cloud ставил зависимости без ручного пути.
    - **App URL (optional):** любое свободное имя (например `linkbuilding-webmaster`).
-   - **Advanced settings:** при **Main file path** = корневой `app.py` поле **App root** / **Main module directory** оставьте **пустым** (корень репозитория). Если путь к файлу = `webmaster-pipeline-dashboard/app.py`, можно задать **App root** = `webmaster-pipeline-dashboard`.
+   - **Python version** (в **Advanced settings** при первом деплое или **Manage app → Settings → General**): выберите **3.12** (семейство 3.12.x). Это соответствует [дефолту Community Cloud](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/deploy). **Не используйте Python 3.14** (и другие экспериментальные): с бинарными колёсами (`pandas`, `google-*`) процесс может падать с **`corrupted unsorted chunks`** и общим **«Oh no»** даже после успешной установки зависимостей.
+   - **App root:** при **Main file path** = корневой `app.py` поле **App root** / **Main module directory** оставьте **пустым** (корень репозитория). Если путь к файлу = `webmaster-pipeline-dashboard/app.py`, можно задать **App root** = `webmaster-pipeline-dashboard`.
 4. **Deploy**. Дождитесь окончания сборки (логи на экране). При ошибке импорта проверьте, что путь к `app.py` и App root согласованы (см. ниже «Oh no»).
 
 ### Этап G. Streamlit — Secrets (Google и опции)
@@ -242,15 +243,17 @@ git push -u github feature/seolb-164-webmaster-prospecting-oleg
 
 ## Если Cloud: «Oh no» / «The service has encountered an error» сразу после «Processed dependencies»
 
-1. **Порт / bind:** в [`.streamlit/config.toml`](.streamlit/config.toml) не должно быть **`server.port`** (например 8503) и **`server.address = "127.0.0.1"`** — иначе health check Cloud не проходит. Локальный порт **8503** — через [run.ps1](run.ps1).
+1. **Версия Python в приложении:** **Manage app → Settings → General → Python version**. Должно быть **3.12** (или стабильная 3.11), **не 3.14**. При 3.14 в логах нередко встречается **`corrupted unsorted chunks`** — смените на **3.12**, **Save**, затем **Reboot app**. По документации Streamlit смена мажорной версии Python иногда требует пересоздать приложение; если после смены и перезапуска ошибка остаётся — удалите приложение и задеплойте снова с **Advanced settings → Python 3.12** (сохраните Secrets и URL в заметку заранее).
 
-2. **Точка входа и корень:** если в настройках приложения **Main file path** = `app.py`, а **App root** = `webmaster-pipeline-dashboard`, Cloud ищет файл по пути `webmaster-pipeline-dashboard/app.py` внутри подпапки — получается неверный путь. Либо **App root** пустой и **Main file path** = корневой [`app.py`](../app.py) (шим), либо **Main file path** = `webmaster-pipeline-dashboard/app.py` и **App root** пустой или совпадает с документацией Cloud для монорепо.
+2. **Порт / bind:** в [`.streamlit/config.toml`](.streamlit/config.toml) не должно быть **`server.port`** (например 8503) и **`server.address = "127.0.0.1"`** — иначе health check Cloud не проходит. Локальный порт **8503** — через [run.ps1](run.ps1).
 
-3. **Зависимости:** в корне репозитория должен быть [`requirements.txt`](../requirements.txt) (указывает на `webmaster-pipeline-dashboard/requirements.txt`), иначе при деплое из корня пакеты могут не совпасть с тем, что нужно дашборду.
+3. **Точка входа и корень:** если в настройках приложения **Main file path** = `app.py`, а **App root** = `webmaster-pipeline-dashboard`, Cloud ищет файл по пути `webmaster-pipeline-dashboard/app.py` внутри подпапки — получается неверный путь. Либо **App root** пустой и **Main file path** = корневой [`app.py`](../app.py) (шим), либо **Main file path** = `webmaster-pipeline-dashboard/app.py` и **App root** пустой или совпадает с документацией Cloud для монорепо.
 
-4. **Текст ошибки:** в [`webmaster-pipeline-dashboard/.streamlit/config.toml`](.streamlit/config.toml) включено **`[client] showErrorDetails = true`** — на странице приложения может появиться traceback (не только «Oh no»).
+4. **Зависимости:** в корне репозитория должен быть [`requirements.txt`](../requirements.txt) (указывает на `webmaster-pipeline-dashboard/requirements.txt`), иначе при деплое из корня пакеты могут не совпасть с тем, что нужно дашборду.
 
-5. **Секреты ещё не заданы:** приложение должно открываться и без блока Secrets (почта через «Сменить почту»). Если в логах **`StreamlitSecretNotFoundError`** при чтении Gmail — в коде не должно быть **`st.secrets or {}`** и прямого **`.get()`** на `st.secrets`; чтение ключей — как в `lib.config._secrets_get` (исправлено в коммите `589c898`).
+5. **Текст ошибки:** в [`webmaster-pipeline-dashboard/.streamlit/config.toml`](.streamlit/config.toml) включено **`[client] showErrorDetails = true`** — на странице приложения может появиться traceback (не только «Oh no»).
+
+6. **Секреты ещё не заданы:** приложение должно открываться и без блока Secrets (почта через «Сменить почту»). Если в логах **`StreamlitSecretNotFoundError`** при чтении Gmail — в коде не должно быть **`st.secrets or {}`** и прямого **`.get()`** на `st.secrets`; чтение ключей — как в `lib.config._secrets_get` (исправлено в коммите `589c898`).
 
 После исправления: **commit → push** на GitHub → в Cloud **Reboot** / **Redeploy**.
 
@@ -258,8 +261,9 @@ git push -u github feature/seolb-164-webmaster-prospecting-oleg
 
 ## Чеклист после деплоя
 
+- [ ] **Python version** в **Settings → General** = **3.12** (не 3.14).
 - [ ] Таблицы Google расшарены на `client_email` из JSON.
 - [ ] В облаке задан `GOOGLE_SERVICE_ACCOUNT_JSON` (или эквивалент через env в Docker).
 - [ ] Книга «Возможности оплаты» (`17MoDWn…`) открыта для SA, если нужна вкладка «Варианты оплаты».
 
-**Последнее обновление:** 2026-04-01 (метка билда UI, troubleshooting Secrets)
+**Последнее обновление:** 2026-04-01 (Python 3.12 на Cloud, метка билда UI, Secrets)
