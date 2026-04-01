@@ -75,8 +75,31 @@ def sync_unseen_webmasters_to_inbox_sheet(
         "payment_reply_errors": [],
     }
 
-    with imaplib.IMAP4_SSL(imap_host, timeout=max(60, imap_timeout_sec)) as imap:
-        imap.login(imap_user, imap_password)
+    def _imap_auth_failed_message(exc: imaplib.IMAP4.error) -> str:
+        err_s = str(exc)
+        base = (
+            "IMAP: **неверный логин или пароль** (Google отклонил вход). "
+            "Проверьте: адрес без опечаток в **домене** (@…), включена **2FA**, в Secrets или в «Сменить почту» указан "
+            "**пароль приложения** (16 символов из настроек Google), а не обычный пароль аккаунта. "
+            "После смены Secrets на Cloud сделайте **Reboot app**."
+        )
+        if "AUTHENTICATIONFAILED" in err_s or "authenticationfailed" in err_s.lower():
+            return base
+        return f"IMAP вход: {err_s}. {base}"
+
+    try:
+        imap_cm = imaplib.IMAP4_SSL(imap_host, timeout=max(60, imap_timeout_sec))
+    except OSError as e:
+        report["errors"].append(f"IMAP: не удалось подключиться к {imap_host!r}: {e}")
+        return report
+
+    with imap_cm as imap:
+        try:
+            imap.login(imap_user, imap_password)
+        except imaplib.IMAP4.error as e:
+            report["errors"].append(_imap_auth_failed_message(e))
+            return report
+
         typ, _ = imap.select(imap_mailbox)
         if typ != "OK":
             report["errors"].append(f"IMAP select {imap_mailbox!r}: {typ}")
