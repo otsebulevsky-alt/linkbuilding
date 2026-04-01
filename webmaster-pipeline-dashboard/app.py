@@ -43,7 +43,7 @@ from lib.sheets_service import (
 )
 
 # Меняйте при каждом релизе UI — в подписи под заголовком видно, что Cloud подтянул новый код.
-PANEL_UI_BUILD = "mail-ui-2026-04-01c"
+PANEL_UI_BUILD = "mail-ui-2026-04-01d"
 
 st.set_page_config(
     page_title="Linkbuilding — панель вебмастеров",
@@ -264,7 +264,7 @@ def main():
     mail_addr, mail_ok = _mail_ready_effective(_secrets_obj)
     session_ov = _normalize_session_email_override()
 
-    # Сайдбар — всегда видно (на Cloud правая колонка шапки легко «теряется»).
+    # Сайдбар — только статус; «Сменить почту» — первая синяя кнопка в основном ряду (без дубля).
     with st.sidebar:
         st.markdown("##### Почта (IMAP / SMTP)")
         if mail_ok:
@@ -273,9 +273,7 @@ def main():
                 st.caption("Логин подменён в сессии; пароль из Secrets.")
         else:
             st.warning("Не задана в Secrets")
-        if st.button("Сменить почту", key="sidebar_mail_btn", use_container_width=True, type="secondary"):
-            st.session_state.mail_settings_panel = not st.session_state.mail_settings_panel
-        st.caption("Пароль приложения — в Secrets; здесь можно сменить только адрес на время сессии.")
+        st.caption("Смена адреса на сессию — первая синяя кнопка ниже («Сменить почту»).")
 
     # Заголовок: markdown # вместо st.title — иначе в части тем Streamlit «съедает» соседнюю колонку.
     st.markdown("# Панель линкбилдинга — вебмастеры")
@@ -298,9 +296,20 @@ def main():
     st.markdown(
         """
         <style>
-        /* Ряд из четырёх основных кнопок (без дубля «Сменить почту» — она только в сайдбаре) */
-        div[data-testid="stHorizontalBlock"]:has(> div:nth-child(4)):not(:has(> div:nth-child(5)))
-          > div button[kind="primary"] {
+        /* Пять кнопок: 1-я — «Сменить почту» (компакт), 2–5 — крупные */
+        div[data-testid="stHorizontalBlock"]:has(> div:nth-child(5)) > div:nth-child(1) button[kind="primary"] {
+            width: 100% !important;
+            font-weight: 600 !important;
+            padding: 0.28rem 0.4rem !important;
+            font-size: 0.7rem !important;
+            min-height: 2rem !important;
+            line-height: 1.15 !important;
+            border-radius: 0.35rem !important;
+            background: linear-gradient(180deg, #3b8eed 0%, #1c7ed6 100%) !important;
+            border: 1px solid #1864ab !important;
+            color: #ffffff !important;
+        }
+        div[data-testid="stHorizontalBlock"]:has(> div:nth-child(5)) > div:nth-child(n+2) button[kind="primary"] {
             width: 100% !important;
             font-weight: 600 !important;
             padding-top: 0.55rem !important;
@@ -349,7 +358,10 @@ def main():
     if "imap_sync_report" not in st.session_state:
         st.session_state.imap_sync_report = None
 
-    qa1, qa2, qa3, qa4 = st.columns(4, gap="small")
+    qa0, qa1, qa2, qa3, qa4 = st.columns([0.95, 1.05, 1.05, 1.05, 1.05], gap="small")
+    with qa0:
+        if st.button("Сменить почту", key="qa_row_change_mail", type="primary", use_container_width=True):
+            st.session_state.mail_settings_panel = not st.session_state.mail_settings_panel
     with qa1:
         if st.button("Прочитать почту", key="qa_mail", use_container_width=True, type="primary"):
             gu, gp = _effective_gmail_imap_credentials(_secrets())
