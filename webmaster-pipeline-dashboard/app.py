@@ -51,6 +51,14 @@ def _secrets():
         return None
 
 
+def _gmail_imap_credentials(secrets_obj):
+    """Gmail IMAP: dedicated keys or same as SMTP (app password)."""
+    s = secrets_obj or {}
+    user = str(s.get("GMAIL_IMAP_USER", "") or s.get("GMAIL_SMTP_USER", "") or "").strip()
+    password = str(s.get("GMAIL_IMAP_APP_PASSWORD", "") or s.get("GMAIL_SMTP_APP_PASSWORD", "") or "").strip()
+    return user, password
+
+
 _secrets_obj = _secrets()
 cfg = load_config(_secrets_obj)
 sa_info = load_service_account_info(_secrets_obj)
@@ -177,12 +185,42 @@ def main():
         """,
         unsafe_allow_html=True,
     )
+    if "imap_quick_rows" not in st.session_state:
+        st.session_state.imap_quick_rows = None
+    if "imap_quick_error" not in st.session_state:
+        st.session_state.imap_quick_error = None
+
     qa1, qa2, qa3, qa4 = st.columns(4, gap="small")
     with qa1:
         if st.button("Прочитать почту", key="qa_mail", use_container_width=True, type="primary"):
-            _quick_notify(
-                "Вкладка «Входящие (IMAP)» → «Загрузить непрочитанные»."
-            )
+            st.session_state.imap_quick_error = None
+            st.session_state.imap_quick_rows = None
+            gu, gp = _gmail_imap_credentials(_secrets())
+            if not gu or not gp:
+                st.session_state.imap_quick_error = (
+                    "Нет доступа к почте: задайте в Secrets **GMAIL_IMAP_USER** и **GMAIL_IMAP_APP_PASSWORD** "
+                    "(или **GMAIL_SMTP_USER** / **GMAIL_SMTP_APP_PASSWORD** — тот же пароль приложения Gmail)."
+                )
+            else:
+                try:
+                    st.session_state.imap_quick_rows = fetch_unread_summaries(
+                        host="imap.gmail.com",
+                        user=gu,
+                        password=gp,
+                        mailbox=cfg.imap_mailbox,
+                        limit=40,
+                    )
+                except Exception as e:
+                    st.session_state.imap_quick_error = f"IMAP: {e}"
+            rows = st.session_state.imap_quick_rows
+            err = st.session_state.imap_quick_error
+            if err:
+                try:
+                    st.toast("Не удалось прочитать почту", icon="⚠️")
+                except Exception:
+                    pass
+            elif rows is not None:
+                _quick_notify(f"Непрочитанных писем: {len(rows)}")
     with qa2:
         if st.button("торг", key="qa_trade", use_container_width=True, type="primary"):
             _quick_notify("Сценарий «торг» — заготовка; логику можно добавить позже.")
@@ -193,6 +231,29 @@ def main():
         if st.button("проверка публикаций", key="qa_check", use_container_width=True, type="primary"):
             _quick_notify("Проверка публикаций — заготовка; позже: сверка статусов с реестром.")
     st.divider()
+
+    if st.session_state.imap_quick_error is not None or st.session_state.imap_quick_rows is not None:
+        with st.expander("📬 Ответы вебмастеров (непрочитанные по IMAP)", expanded=True):
+            st.caption(
+                "Это **не** ИИ-агент в браузере: сервер Streamlit подключается к **Gmail по IMAP** с паролем из Secrets. "
+                "Показаны письма со статусом непрочитанное (UNSEEN) в ящике **INBOX** (или как задано в `IMAP_MAILBOX`)."
+            )
+            if st.session_state.imap_quick_error:
+                st.error(st.session_state.imap_quick_error)
+            else:
+                rows = st.session_state.imap_quick_rows or []
+                if not rows:
+                    st.info("Нет непрочитанных писем.")
+                else:
+                    st.dataframe(
+                        pd.DataFrame(rows),
+                        use_container_width=True,
+                        height=min(480, 72 + 36 * len(rows)),
+                    )
+            if st.button("Скрыть блок почты", key="imap_quick_clear"):
+                st.session_state.imap_quick_rows = None
+                st.session_state.imap_quick_error = None
+                st.rerun()
 
     tab_stats, tab_reg, tab_wait, tab_inbox, tab_calc, tab_pay = st.tabs(
         (
@@ -344,8 +405,7 @@ def main():
             "Сейчас — просмотр последних непрочитанных писем в ящике."
         )
         secrets = _secrets() or {}
-        gu = str(secrets.get("GMAIL_IMAP_USER", "") or secrets.get("GMAIL_SMTP_USER", "") or "").strip()
-        gp = str(secrets.get("GMAIL_IMAP_APP_PASSWORD", "") or secrets.get("GMAIL_SMTP_APP_PASSWORD", "") or "").strip()
+        gu, gp = _gmail_imap_credentials(secrets)
         if st.button("Загрузить непрочитанные"):
             if not gu or not gp:
                 st.error("Задайте GMAIL_IMAP_USER / GMAIL_IMAP_APP_PASSWORD (или общие GMAIL_SMTP_*).")
