@@ -15,6 +15,16 @@ def _env(key: str, default: str = "") -> str:
     return (v or "").strip() if v is not None else default
 
 
+def _env_int(key: str, default: int) -> int:
+    raw = _env(key, "")
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
+
 @dataclass
 class AppConfig:
     # Canonical spreadsheet IDs (from implementation-notes / HACK-382)
@@ -45,6 +55,13 @@ class AppConfig:
 
     # Optional: IMAP folder / label search
     imap_mailbox: str
+    # 0 = обработать все UNSEEN за один запуск; >0 = не больше N последних по порядку IMAP
+    imap_sync_max_messages: int
+    imap_sync_timeout_sec: int
+    # UNSEEN: сначала более новые по номеру последовательности IMAP (как правило ближе к верху Gmail)
+    imap_sync_newest_first: bool
+    # После записи в таблицу: один раз на письмо отправить SMTP с текстом колонки F (уточнение про оплату)
+    imap_auto_reply_payment_followup: bool
 
     # Extra substrings to match Linkbuilder column (e.g. Oleg vs Олег)
     linkbuilder_aliases: list[str]
@@ -91,6 +108,30 @@ def _secrets_get_int(secrets: Any, key: str, default: int) -> int:
         return default
 
 
+def _env_bool(key: str, default: bool) -> bool:
+    raw = _env(key, "")
+    if not raw:
+        return default
+    low = raw.lower()
+    if low in ("0", "false", "no", "off"):
+        return False
+    if low in ("1", "true", "yes", "on"):
+        return True
+    return default
+
+
+def _secrets_get_bool(secrets: Any, key: str, default: bool) -> bool:
+    raw = _secrets_get(secrets, key, "")
+    if not raw:
+        return default
+    low = raw.lower()
+    if low in ("0", "false", "no", "off"):
+        return False
+    if low in ("1", "true", "yes", "on"):
+        return True
+    return default
+
+
 def _parse_list_csv(secrets: Any, key: str, default_items: list[str]) -> list[str]:
     raw = _secrets_get(secrets, key, "")
     if not raw:
@@ -134,6 +175,29 @@ def load_config(secrets: Any | None = None) -> AppConfig:
         col_website_donor=_secrets_get(secrets, "COL_WEBSITE_DONOR", "Website Donor"),
         col_cost=_secrets_get(secrets, "COL_COST", "Cost $"),
         imap_mailbox=_secrets_get(secrets, "IMAP_MAILBOX", "INBOX"),
+        imap_sync_max_messages=_secrets_get_int(
+            secrets,
+            "IMAP_SYNC_MAX_MESSAGES",
+            _env_int("IMAP_SYNC_MAX_MESSAGES", 0),
+        ),
+        imap_sync_timeout_sec=max(
+            60,
+            _secrets_get_int(
+                secrets,
+                "IMAP_SYNC_TIMEOUT_SEC",
+                _env_int("IMAP_SYNC_TIMEOUT_SEC", 900),
+            ),
+        ),
+        imap_sync_newest_first=_secrets_get_bool(
+            secrets,
+            "IMAP_SYNC_NEWEST_FIRST",
+            _env_bool("IMAP_SYNC_NEWEST_FIRST", True),
+        ),
+        imap_auto_reply_payment_followup=_secrets_get_bool(
+            secrets,
+            "IMAP_AUTO_REPLY_PAYMENT_FOLLOWUP",
+            _env_bool("IMAP_AUTO_REPLY_PAYMENT_FOLLOWUP", False),
+        ),
         linkbuilder_aliases=_parse_list_csv(
             secrets,
             "LINKBUILDER_ALIASES",

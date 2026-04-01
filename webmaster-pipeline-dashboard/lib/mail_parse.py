@@ -35,10 +35,16 @@ _SKIP_NETLOCS = frozenset(
 )
 
 _URL_RE = re.compile(r'https?://[^\s<>"\')\]]+', re.IGNORECASE)
+# Host in subject: example.com, mayfair-london.co.uk
+_SUBJ_HOST_CORE = (
+    r"[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?"
+    r"\.(?:[a-z]{2,}|com\.[a-z]{2}|co\.[a-z]{2})"
+)
 # "Content collaboration idea for marketingmedian.com"
-_SUBJ_DOMAIN_RE = re.compile(
-    r"\bfor\s+([a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\.(?:[a-z]{2,}|com\.[a-z]{2}|co\.[a-z]{2}))\b",
-    re.IGNORECASE,
+# "Interest in collaborating with your website banglarrbhumi.com"
+_SUBJECT_DOMAIN_RES: tuple[re.Pattern[str], ...] = (
+    re.compile(rf"\bfor\s+({_SUBJ_HOST_CORE})\b", re.I),
+    re.compile(rf"\byour\s+website\s+({_SUBJ_HOST_CORE})\b", re.I),
 )
 _PRICE_RES = (
     re.compile(r"\$\s*[\d,]+(?:\.\d{1,2})?", re.IGNORECASE),
@@ -67,10 +73,12 @@ def _normalize_host(raw: str) -> str | None:
 def domain_from_subject(subject: str) -> str | None:
     if not subject or not subject.strip():
         return None
-    m = _SUBJ_DOMAIN_RE.search(subject.strip())
-    if not m:
-        return None
-    return _normalize_host(m.group(1))
+    s = subject.strip()
+    for rx in _SUBJECT_DOMAIN_RES:
+        m = rx.search(s)
+        if m:
+            return _normalize_host(m.group(1))
+    return None
 
 
 def domains_from_urls_in_text(text: str) -> list[str]:

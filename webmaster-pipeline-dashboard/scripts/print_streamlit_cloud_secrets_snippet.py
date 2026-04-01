@@ -41,6 +41,15 @@ def main() -> None:
     print()
     print('LINKBUILDER_FILTER = "Олег"')
     print('LINKBUILDER_ALIASES = "Oleg,oleg"')
+    print()
+    print("# --- Mail (replace APP_PASSWORD with your Google App Password, 16 chars) ---")
+    print('GMAIL_SMTP_USER = "o.tsebulevsky@rantsports.com"')
+    print('GMAIL_SMTP_APP_PASSWORD = "APP_PASSWORD"')
+    print('GMAIL_SMTP_HOST = "smtp.gmail.com"')
+    print('GMAIL_SMTP_PORT = "587"')
+    print('GMAIL_IMAP_USER = "o.tsebulevsky@rantsports.com"')
+    print('GMAIL_IMAP_APP_PASSWORD = "APP_PASSWORD"')
+    print('IMAP_MAILBOX = "INBOX"')
 
 
 if __name__ == "__main__":
