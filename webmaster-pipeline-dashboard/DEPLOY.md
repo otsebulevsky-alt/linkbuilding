@@ -71,8 +71,17 @@ Job **`mirror_github_streamlit`** в [`.gitlab-ci.yml`](../.gitlab-ci.yml) вы�
    - **Main file path (рекомендуется):** `webmaster-pipeline-dashboard/app.py`, **App root** пустой — один процесс Streamlit, без шима `importlib`. **Альтернатива:** корневой [`app.py`](../app.py) (шим с `chdir` + загрузка дашборда). Зависимости только из **корневого** [`requirements.txt`](../requirements.txt) (**без** второго `requirements.txt` во вложенной папке и без `-r`, иначе в логах **«More than one requirement file»** и возможны **segfault** после установки пакетов).
    - **App URL (optional):** любое свободное имя (например `linkbuilding-webmaster`).
    - **Python version** (в **Advanced settings** при первом деплое или **Manage app → Settings → General**): выберите **3.12** (семейство 3.12.x). Это соответствует [дефолту Community Cloud](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/deploy). **Не используйте Python 3.14** (и другие экспериментальные): с бинарными колёсами (`pandas`, `google-*`) процесс может падать с **`corrupted unsorted chunks`** и общим **«Oh no»** даже после успешной установки зависимостей.
-   - **App root:** при **Main file path** = корневой `app.py` поле **App root** / **Main module directory** оставьте **пустым** (корень репозитория). Если путь к файлу = `webmaster-pipeline-dashboard/app.py`, можно задать **App root** = `webmaster-pipeline-dashboard`.
+   - **App root:** если **Main file path** = `webmaster-pipeline-dashboard/app.py` — поле **App root** оставьте **пустым**. Если **Main file path** = корневой `app.py` (шим) — **App root** тоже **пустой**. Не комбинируйте «корневой app.py + App root = webmaster-pipeline-dashboard» без необходимости (легко сломать путь к файлу).
 4. **Deploy**. Дождитесь окончания сборки (логи на экране). При ошибке импорта проверьте, что путь к `app.py` и App root согласованы (см. ниже «Oh no»).
+
+### Этап F1. Обязательная проверка логов после деплоя
+
+В правой колонке логов сборки найдите строку про установку зависимостей:
+
+- **Нужно:** путь вида **`.../linkbuilding/requirements.txt`** (только корень репозитория).
+- **Плохо:** **`webmaster-pipeline-dashboard/requirements.txt`** или предупреждение **«More than one requirements file»** — значит Cloud клонировал **старый коммит** или кеш; сделайте **Reboot app**. Если не помогло — **удалите приложение** в Streamlit и создайте заново с теми же Repository / Branch / Secrets (см. [удаление приложения](https://docs.streamlit.io/deploy/streamlit-community-cloud/manage-your-app/delete-your-app)), затем снова **Deploy**.
+
+После успешного обновления кода в подписи под заголовком панели должна появиться метка **`mail-ui-2026-04-02e`** (или новее).
 
 ### Этап G. Streamlit — Secrets (Google и опции)
 
@@ -104,7 +113,7 @@ Job **`mirror_github_streamlit`** в [`.gitlab-ci.yml`](../.gitlab-ci.yml) вы�
 
 1. Откройте выданный URL вида `https://<имя>.streamlit.app`.
 2. Должны открыться вкладки панели; данные из Google Sheets подтянутся, если таблицы расшарены на **`client_email`** из JSON и Secrets сохранены без ошибок.
-3. **Проверка, что Cloud подтянул свежий код:** в серой подписи под заголовком «Панель линкбилдинга» в начале должна быть метка вида **`mail-ui-2026-04-02d`** (или новее). **«Сменить почту»** — **справа от заголовка**; в форме — **логин** и при необходимости **пароль приложения** (можно только на сессию, без Secrets). Ниже — четыре синие кнопки. Если метки нет — push на GitHub и **Reboot app**.
+3. **Проверка, что Cloud подтянул свежий код:** в серой подписи под заголовком «Панель линкбилдинга» в начале должна быть метка вида **`mail-ui-2026-04-02e`** (или новее). **«Сменить почту»** — **справа от заголовка**; в форме — **логин** и при необходимости **пароль приложения** (можно только на сессию, без Secrets). Ниже — четыре синие кнопки. Если метки нет — push на GitHub и **Reboot app**.
 
 ### Опционально: локальный `git push` на GitHub с ПК (без CI)
 
@@ -257,16 +266,16 @@ git push -u github feature/seolb-164-webmaster-prospecting-oleg
 
 7. **Секреты ещё не заданы:** приложение должно открываться и без блока Secrets (почта через «Сменить почту»). Если в логах **`StreamlitSecretNotFoundError`** при чтении Gmail — в коде не должно быть **`st.secrets or {}`** и прямого **`.get()`** на `st.secrets`; чтение ключей — как в `lib.config._secrets_get` (исправлено в коммите `589c898`).
 
-После исправления: **commit → push** на GitHub → в Cloud **Reboot** / **Redeploy**.
+После исправления: **commit → push** на GitHub → в Cloud **Reboot** / **Redeploy**. Если в логах всё ещё фигурирует **`webmaster-pipeline-dashboard/requirements.txt`** — пересоздайте приложение (этап F1).
 
 ---
 
 ## Чеклист после деплоя
 
 - [ ] **Python version** в **Settings → General** = **3.12** (не 3.14).
-- [ ] В логах нет **«More than one requirement file»**; **Main file path** = `webmaster-pipeline-dashboard/app.py` (рекомендуется).
+- [ ] В логах зависимости ставятся из **`.../requirements.txt` в корне** репо, без **`webmaster-pipeline-dashboard/requirements.txt`** и без **«More than one requirements file»**; **Main file path** = `webmaster-pipeline-dashboard/app.py`.
 - [ ] Таблицы Google расшарены на `client_email` из JSON.
 - [ ] В облаке задан `GOOGLE_SERVICE_ACCOUNT_JSON` (или эквивалент через env в Docker).
 - [ ] Книга «Возможности оплаты» (`17MoDWn…`) открыта для SA, если нужна вкладка «Варианты оплаты».
 
-**Последнее обновление:** 2026-04-01 (один requirements.txt, segfault / два манифеста, Python 3.12)
+**Последнее обновление:** 2026-04-01 (этап F1 проверка логов, numpy pin, метка mail-ui-2026-04-02e)

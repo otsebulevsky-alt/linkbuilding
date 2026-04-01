@@ -1,7 +1,7 @@
-# Единственный манифест для Streamlit Community Cloud (без второго requirements и без `-r`).
-# Раньше корневой файл делал `-r webmaster-pipeline-dashboard/requirements.txt` → предупреждение
-# «More than one requirement file» и нестабильное разрешение зависимостей (вплоть до segfault).
+# Streamlit Community Cloud: exactly ONE requirements.txt at repo root (no second file under webmaster-pipeline-dashboard/).
+# Pin stack for Linux + Python 3.12; loose streamlit>= pulls 1.5x and can segfault after "Processed dependencies!".
 streamlit==1.36.0
+numpy==1.26.4
 pandas==2.2.3
 google-api-python-client==2.154.0
 google-auth==2.36.0

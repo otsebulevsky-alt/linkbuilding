@@ -1,0 +1,26 @@
+# Python / venv
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+.venv/
+venv/
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Local Streamlit secrets (never commit)
+.streamlit/secrets.toml
+webmaster-pipeline-dashboard/.streamlit/secrets.toml
+webmaster-pipeline-dashboard/.streamlit/*.json
+webmaster-pipeline-dashboard/.streamlit/*.bak
+
+# Optional: scratch files sometimes created at repo root during local work
+_batch*.txt
+_batch*.json
+_page*.txt
+_ids*.txt
+_batches.json
+thread_ids_read.txt
+all_read_thread_ids.txt
