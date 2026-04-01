@@ -81,7 +81,7 @@ Job **`mirror_github_streamlit`** в [`.gitlab-ci.yml`](../.gitlab-ci.yml) вы�
 - **Нужно:** путь вида **`.../linkbuilding/requirements.txt`** (только корень репозитория).
 - **Плохо:** **`webmaster-pipeline-dashboard/requirements.txt`** или предупреждение **«More than one requirements file»** — значит Cloud клонировал **старый коммит** или кеш; сделайте **Reboot app**. Если не помогло — **удалите приложение** в Streamlit и создайте заново с теми же Repository / Branch / Secrets (см. [удаление приложения](https://docs.streamlit.io/deploy/streamlit-community-cloud/manage-your-app/delete-your-app)), затем снова **Deploy**.
 
-После успешного обновления кода в подписи под заголовком панели должна появиться метка **`mail-ui-2026-04-02f`** (или новее).
+После успешного обновления кода в подписи под заголовком панели должна появиться метка **`mail-ui-2026-04-03a`** (или новее).
 
 ### Этап G. Streamlit — Secrets (Google и опции)
 
@@ -113,7 +113,7 @@ Job **`mirror_github_streamlit`** в [`.gitlab-ci.yml`](../.gitlab-ci.yml) вы�
 
 1. Откройте выданный URL вида `https://<имя>.streamlit.app`.
 2. Должны открыться вкладки панели; данные из Google Sheets подтянутся, если таблицы расшарены на **`client_email`** из JSON и Secrets сохранены без ошибок.
-3. **Проверка, что Cloud подтянул свежий код:** в серой подписи под заголовком «Панель линкбилдинга» в начале должна быть метка вида **`mail-ui-2026-04-02f`** (или новее). **«Сменить почту»** — **справа от заголовка**; в форме — **логин** и при необходимости **пароль приложения** (можно только на сессию, без Secrets). Ниже — четыре синие кнопки. Если метки нет — push на GitHub и **Reboot app**.
+3. **Проверка, что Cloud подтянул свежий код:** в серой подписи под заголовком «Панель линкбилдинга» в начале должна быть метка вида **`mail-ui-2026-04-03a`** (или новее). **«Сменить почту»** — **справа от заголовка**; в форме — **логин** и при необходимости **пароль приложения** (можно только на сессию, без Secrets). Ниже — четыре синие кнопки. Если метки нет — push на GitHub и **Reboot app**.
 
 ### Опционально: локальный `git push` на GitHub с ПК (без CI)
 
@@ -254,7 +254,7 @@ git push -u github feature/seolb-164-webmaster-prospecting-oleg
 
 1. **Версия Python в приложении:** **Manage app → Settings → General → Python version**. Должно быть **3.12** (или стабильная 3.11), **не 3.14**. При 3.14 в логах нередко встречается **`corrupted unsorted chunks`** — смените на **3.12**, **Save**, затем **Reboot app**. По документации Streamlit смена мажорной версии Python иногда требует пересоздать приложение; если после смены и перезапуска ошибка остаётся — удалите приложение и задеплойте снова с **Advanced settings → Python 3.12** (сохраните Secrets и URL в заметку заранее).
 
-2. **Segmentation fault сразу после «Processed dependencies»:** убедитесь, что в репозитории **один** файл **`requirements.txt`** (в корне зеркала `linkbuilding`), без вложенного второго и без строки **`-r .../requirements.txt`**. В логах предупреждение **«More than one requirement file»** — признак; зафиксированы версии в корневом файле (см. коммит с сообщением про single requirements). Дополнительно переключите **Main file path** на **`webmaster-pipeline-dashboard/app.py`** и оставьте **App root** пустым.
+2. **Segmentation fault сразу после «Processed dependencies»:** убедитесь, что в репозитории **один** файл **`requirements.txt`** (в корне зеркала `linkbuilding`), без вложенного второго и без строки **`-r .../requirements.txt`**. В логах предупреждение **«More than one requirement file»** — признак. В корневом [`requirements.txt`](../requirements.txt) зафиксированы **`pyarrow==14.0.2`**, **`protobuf==4.25.3`**, **`pandas==2.1.4`** вместе со **`streamlit==1.36.0`** — чтобы `uv` не подтянул слишком новые нативные колёса (типичная причина segfault при запуске `streamlit`). Если после push и **Reboot** падение остаётся — в **Settings → General** попробуйте **Python 3.11** вместо 3.12, затем снова **Reboot**. Дополнительно переключите **Main file path** на **`webmaster-pipeline-dashboard/app.py`** и оставьте **App root** пустым.
 
 3. **Порт / bind:** в [`.streamlit/config.toml`](.streamlit/config.toml) не должно быть **`server.port`** (например 8503) и **`server.address = "127.0.0.1"`** — иначе health check Cloud не проходит. Локальный порт **8503** — через [run.ps1](run.ps1).
 
@@ -278,4 +278,4 @@ git push -u github feature/seolb-164-webmaster-prospecting-oleg
 - [ ] В облаке задан `GOOGLE_SERVICE_ACCOUNT_JSON` (или эквивалент через env в Docker).
 - [ ] Книга «Возможности оплаты» (`17MoDWn…`) открыта для SA, если нужна вкладка «Варианты оплаты».
 
-**Последнее обновление:** 2026-04-01 (этап F1 проверка логов, numpy pin, метка mail-ui-2026-04-02f)
+**Последнее обновление:** 2026-04-03 (pyarrow/protobuf/pandas pin против segfault на Cloud, метка mail-ui-2026-04-03a)
