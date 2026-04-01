@@ -196,8 +196,9 @@ def sync_unseen_webmasters_to_inbox_sheet(
             ):
                 if not (smtp_user and smtp_password):
                     report["payment_reply_errors"].append(
-                        f"seq={num.decode('ascii', errors='replace')}: SMTP не настроен "
-                        "(нужны GMAIL_SMTP_USER и GMAIL_SMTP_APP_PASSWORD)."
+                        f"seq={num.decode('ascii', errors='replace')}: SMTP не настроен — "
+                        "нужны **GMAIL_SMTP_USER** + **GMAIL_SMTP_APP_PASSWORD** "
+                        "или те же логин/пароль через **GMAIL_IMAP_*** (панель подставляет их для отправки)."
                     )
                 else:
                     try:

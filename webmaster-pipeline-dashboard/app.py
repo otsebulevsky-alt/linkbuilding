@@ -43,7 +43,7 @@ from lib.sheets_service import (
 )
 
 # Меняйте при каждом релизе UI — в подписи под заголовком видно, что Cloud подтянул новый код.
-PANEL_UI_BUILD = "mail-ui-2026-04-03b"
+PANEL_UI_BUILD = "mail-ui-2026-04-03c"
 
 st.set_page_config(
     page_title="Linkbuilding — панель вебмастеров",
@@ -73,9 +73,17 @@ def _gmail_imap_credentials(secrets_obj):
 
 
 def _gmail_smtp_settings(secrets_obj):
-    """SMTP для автоответа про оплату и вкладки «Жду публикации»."""
+    """SMTP для автоответа про оплату и вкладки «Жду публикации».
+
+    Симметрично IMAP: если заданы только **GMAIL_IMAP_***, используем их для SMTP
+    (один пароль приложения на чтение и отправку).
+    """
     user = _secrets_get(secrets_obj, "GMAIL_SMTP_USER").strip()
     password = _secrets_get(secrets_obj, "GMAIL_SMTP_APP_PASSWORD").strip()
+    if not user:
+        user = _secrets_get(secrets_obj, "GMAIL_IMAP_USER").strip()
+    if not password:
+        password = _secrets_get(secrets_obj, "GMAIL_IMAP_APP_PASSWORD").strip()
     host = (_secrets_get(secrets_obj, "GMAIL_SMTP_HOST", "smtp.gmail.com") or "smtp.gmail.com").strip()
     port = _secrets_get_int(secrets_obj, "GMAIL_SMTP_PORT", 587)
     return host, port, user, password
