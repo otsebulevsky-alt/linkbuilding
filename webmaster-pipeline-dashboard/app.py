@@ -43,7 +43,7 @@ from lib.sheets_service import (
 )
 
 # Меняйте при каждом релизе UI — в подписи под заголовком видно, что Cloud подтянул новый код.
-PANEL_UI_BUILD = "mail-ui-2026-04-01d"
+PANEL_UI_BUILD = "mail-ui-2026-04-01e"
 
 st.set_page_config(
     page_title="Linkbuilding — панель вебмастеров",
@@ -271,6 +271,10 @@ def main():
             st.success(html.escape(mail_addr))
             if session_ov:
                 st.caption("Логин подменён в сессии; пароль из Secrets.")
+        elif session_ov:
+            st.warning(
+                f"Подмена `{html.escape(session_ov)}` — в Secrets нет пароля приложения, почта не работает."
+            )
         else:
             st.warning("Не задана в Secrets")
         st.caption("Смена адреса на сессию — первая синяя кнопка ниже («Сменить почту»).")
@@ -280,6 +284,10 @@ def main():
 
     if session_ov and mail_ok:
         mail_line = f"**Почта (сессия):** `{html.escape(mail_addr)}` · пароль из Secrets"
+    elif session_ov:
+        mail_line = (
+            f"**Подмена:** `{html.escape(session_ov)}` — добавьте **GMAIL_SMTP_APP_PASSWORD** или **GMAIL_IMAP_APP_PASSWORD** в Secrets"
+        )
     elif mail_ok:
         mail_line = f"**Почта (Secrets):** `{html.escape(mail_addr)}`"
     else:
