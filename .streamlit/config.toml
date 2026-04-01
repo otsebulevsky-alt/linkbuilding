@@ -1,0 +1,10 @@
+# Используется, если Main file path в Cloud = корневой `app.py`.
+# Не задавайте server.port / server.address — см. webmaster-pipeline-dashboard/.streamlit/config.toml
+[server]
+headless = true
+
+[browser]
+gatherUsageStats = false
+
+[client]
+showErrorDetails = true

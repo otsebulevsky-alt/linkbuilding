@@ -8,3 +8,7 @@ headless = true
 
 [browser]
 gatherUsageStats = false
+
+# Показывать traceback в UI при падении (удобнее отладка Cloud).
+[client]
+showErrorDetails = true

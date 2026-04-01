@@ -1,0 +1,2 @@
+# Streamlit Cloud installs from repo root by default.
+-r webmaster-pipeline-dashboard/requirements.txt

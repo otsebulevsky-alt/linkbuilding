@@ -68,10 +68,10 @@ Job **`mirror_github_streamlit`** в [`.gitlab-ci.yml`](../.gitlab-ci.yml) вы�
 3. Заполните форму [share.streamlit.io/deploy](https://share.streamlit.io/deploy):
    - **Repository:** `otsebulevsky-alt/linkbuilding`
    - **Branch:** `feature/seolb-164-webmaster-prospecting-oleg`
-   - **Main file path:** `webmaster-pipeline-dashboard/app.py`
+   - **Main file path:** `app.py` **(корень репозитория)** или `webmaster-pipeline-dashboard/app.py` — в корне есть шим [`app.py`](../app.py), подключающий дашборд; в корне также [`requirements.txt`](../requirements.txt) (`-r webmaster-pipeline-dashboard/...`), чтобы Cloud ставил зависимости без ручного пути.
    - **App URL (optional):** любое свободное имя (например `linkbuilding-webmaster`).
-   - **Advanced settings** (если есть): **Main module directory** / **App root** = `webmaster-pipeline-dashboard`
-4. **Deploy**. Дождитесь окончания сборки (логи на экране). При ошибке импорта проверьте, что путь к `app.py` и root совпадают с пунктами выше.
+   - **Advanced settings:** при **Main file path** = корневой `app.py` поле **App root** / **Main module directory** оставьте **пустым** (корень репозитория). Если путь к файлу = `webmaster-pipeline-dashboard/app.py`, можно задать **App root** = `webmaster-pipeline-dashboard`.
+4. **Deploy**. Дождитесь окончания сборки (логи на экране). При ошибке импорта проверьте, что путь к `app.py` и App root согласованы (см. ниже «Oh no»).
 
 ### Этап G. Streamlit — Secrets (Google и опции)
 
@@ -234,13 +234,19 @@ cd C:\project\start\internal\seo\linkbuilding
 git push -u github feature/seolb-164-webmaster-prospecting-oleg
 ```
 
-4. [share.streamlit.io/deploy](https://share.streamlit.io/deploy) — **Repository:** `OWNER/linkbuilding`, **Branch:** `feature/seolb-164-webmaster-prospecting-oleg`, **Main file path:** `webmaster-pipeline-dashboard/app.py`, при необходимости **App root:** `webmaster-pipeline-dashboard`.
+4. [share.streamlit.io/deploy](https://share.streamlit.io/deploy) — **Repository:** `OWNER/linkbuilding`, **Branch:** `feature/seolb-164-webmaster-prospecting-oleg`, **Main file path:** корневой `app.py` или `webmaster-pipeline-dashboard/app.py` (см. этап F); **App root** не должен конфликтовать с путём к файлу.
 
 ---
 
 ## Если Cloud: «Oh no» / «The service has encountered an error» сразу после «Processed dependencies»
 
-Частая причина: в [`.streamlit/config.toml`](.streamlit/config.toml) заданы **`server.port`** (например 8503) и/или **`server.address = "127.0.0.1"`**. Тогда процесс слушает «не тот» порт или только localhost — **health check** Streamlit Community Cloud не проходит. В репозитории оставляйте только безопасные опции (`headless`, `gatherUsageStats`); локальный порт **8503** — через [run.ps1](run.ps1).
+1. **Порт / bind:** в [`.streamlit/config.toml`](.streamlit/config.toml) не должно быть **`server.port`** (например 8503) и **`server.address = "127.0.0.1"`** — иначе health check Cloud не проходит. Локальный порт **8503** — через [run.ps1](run.ps1).
+
+2. **Точка входа и корень:** если в настройках приложения **Main file path** = `app.py`, а **App root** = `webmaster-pipeline-dashboard`, Cloud ищет файл по пути `webmaster-pipeline-dashboard/app.py` внутри подпапки — получается неверный путь. Либо **App root** пустой и **Main file path** = корневой [`app.py`](../app.py) (шим), либо **Main file path** = `webmaster-pipeline-dashboard/app.py` и **App root** пустой или совпадает с документацией Cloud для монорепо.
+
+3. **Зависимости:** в корне репозитория должен быть [`requirements.txt`](../requirements.txt) (указывает на `webmaster-pipeline-dashboard/requirements.txt`), иначе при деплое из корня пакеты могут не совпасть с тем, что нужно дашборду.
+
+4. **Текст ошибки:** в [`webmaster-pipeline-dashboard/.streamlit/config.toml`](.streamlit/config.toml) включено **`[client] showErrorDetails = true`** — на странице приложения может появиться traceback (не только «Oh no»).
 
 После исправления: **commit → push** на GitHub → в Cloud **Reboot** / **Redeploy**.
 
