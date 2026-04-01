@@ -42,7 +42,14 @@ from lib.sheets_service import (
     resolve_status_column,
 )
 
-st.set_page_config(page_title="Linkbuilding — панель вебмастеров", layout="wide")
+# Меняйте при каждом релизе UI — в подписи под заголовком видно, что Cloud подтянул новый код.
+PANEL_UI_BUILD = "mail-ui-2026-03-30b"
+
+st.set_page_config(
+    page_title="Linkbuilding — панель вебмастеров",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 
 
 def _secrets():
@@ -58,6 +65,25 @@ def _gmail_imap_credentials(secrets_obj):
     user = str(s.get("GMAIL_IMAP_USER", "") or s.get("GMAIL_SMTP_USER", "") or "").strip()
     password = str(s.get("GMAIL_IMAP_APP_PASSWORD", "") or s.get("GMAIL_SMTP_APP_PASSWORD", "") or "").strip()
     return user, password
+
+
+def _gmail_smtp_settings(secrets_obj):
+    """SMTP для автоответа про оплату и вкладки «Жду публикации»."""
+    s = secrets_obj or {}
+    user = str(s.get("GMAIL_SMTP_USER", "") or "").strip()
+    password = str(s.get("GMAIL_SMTP_APP_PASSWORD", "") or "").strip()
+    host = str(s.get("GMAIL_SMTP_HOST", "smtp.gmail.com") or "smtp.gmail.com").strip()
+    try:
+        port = int(s.get("GMAIL_SMTP_PORT", 587))
+    except (TypeError, ValueError):
+        port = 587
+    return host, port, user, password
+
+
+def _mail_ready_for_imap(secrets_obj) -> tuple[str, bool]:
+    """(отображаемый email, достаточно ли секретов для IMAP/SMTP)."""
+    u, p = _gmail_imap_credentials(secrets_obj)
+    return (u, bool(u and p))
 
 
 _secrets_obj = _secrets()
@@ -132,10 +158,121 @@ def registry_diagnostics(
             st.warning("Колонка статуса не найдена — ожидается `Status` или заголовок со «status».")
 
 
+def _render_mail_settings_panel(mail_addr: str, mail_ok: bool) -> None:
+    """Панель инструкций: Secrets / смена почты."""
+    st.markdown("---")
+    with st.container():
+        st.subheader("Почта: один раз — и всегда подключена")
+        st.markdown(
+            "На **Streamlit Community Cloud** логин и пароль приложения хранятся в **Settings → Secrets** "
+            "этого приложения. Они **не пропадают** при перезапуске и обычном деплое — пока вы сами не измените Secrets.\n\n"
+            "**Сменить адрес или пароль:** откройте [share.streamlit.io](https://share.streamlit.io) → "
+            "ваше приложение → **⋮ (Manage app)** → **Settings** → **Secrets** → отредактируйте блок `GMAIL_*` / "
+            "`GMAIL_IMAP_*` → **Save** → **Reboot app**.\n\n"
+            "**Локально:** файл `.streamlit/secrets.toml` в папке приложения — образец: "
+            "`webmaster-pipeline-dashboard/secrets.toml.example` — изменения действуют после сохранения файла "
+            "и обновления страницы."
+        )
+        ex_user = mail_addr if mail_ok else "o.tsebulevsky@rantsports.com"
+        snippet = (
+            "# Почта (пароль приложения Google, не пароль входа)\n"
+            f'GMAIL_SMTP_USER = "{ex_user}"\n'
+            'GMAIL_SMTP_APP_PASSWORD = "xxxx xxxx xxxx xxxx"\n'
+            'GMAIL_SMTP_HOST = "smtp.gmail.com"\n'
+            'GMAIL_SMTP_PORT = "587"\n'
+            f'GMAIL_IMAP_USER = "{ex_user}"\n'
+            'GMAIL_IMAP_APP_PASSWORD = "xxxx xxxx xxxx xxxx"\n'
+            'IMAP_MAILBOX = "INBOX"'
+        )
+        st.caption("Скопируйте в Secrets и замените пароль приложения")
+        st.code(snippet, language="toml")
+        st.caption(
+            "Достаточно задать **GMAIL_SMTP_USER** и **GMAIL_SMTP_APP_PASSWORD** — «Прочитать почту» подставит их для IMAP."
+        )
+        if st.button("Скрыть инструкцию", key="mail_panel_close"):
+            st.session_state.mail_settings_panel = False
+
+
 def main():
-    st.title("Панель линкбилдинга — вебмастеры")
+    if "mail_settings_panel" not in st.session_state:
+        st.session_state.mail_settings_panel = False
+
+    mail_addr, mail_ok = _mail_ready_for_imap(_secrets_obj)
+
+    # Сайдбар — всегда видно (на Cloud правая колонка шапки легко «теряется»).
+    with st.sidebar:
+        st.markdown("##### Почта (IMAP / SMTP)")
+        if mail_ok:
+            st.success(html.escape(mail_addr))
+        else:
+            st.warning("Не задана в Secrets")
+        if st.button("Сменить почту", key="sidebar_mail_btn", use_container_width=True, type="secondary"):
+            st.session_state.mail_settings_panel = not st.session_state.mail_settings_panel
+        st.caption("Один раз сохранили в Secrets — работает всегда, пока не смените.")
+
+    # Заголовок: markdown # вместо st.title — иначе в части тем Streamlit «съедает» соседнюю колонку с кнопкой.
+    row_title, row_btn = st.columns([22, 3.4], gap="small")
+    with row_title:
+        st.markdown("# Панель линкбилдинга — вебмастеры")
+    with row_btn:
+        if st.button("Сменить почту", key="hdr_change_mail", type="primary", use_container_width=True):
+            st.session_state.mail_settings_panel = not st.session_state.mail_settings_panel
+
+    mail_line = (
+        f"**Почта (Secrets):** `{html.escape(mail_addr)}`"
+        if mail_ok
+        else "**Почта:** не задана в Secrets"
+    )
     st.caption(
-        f"Фильтр Linkbuilder: **{cfg.linkbuilder_filter}** · Статусы: «{cfg.status_prep_text}», «{cfg.status_wait_publish}»"
+        f"`{PANEL_UI_BUILD}` · {mail_line} · Фильтр Linkbuilder: **{cfg.linkbuilder_filter}** · "
+        f"Статусы: «{cfg.status_prep_text}», «{cfg.status_wait_publish}»"
+    )
+
+    if st.session_state.mail_settings_panel:
+        _render_mail_settings_panel(mail_addr, mail_ok)
+
+    # До проверки Sheets — чтобы стили шапки применялись даже при st.stop() из-за SA.
+    st.markdown(
+        """
+        <style>
+        /* Пять кнопок в ряду: 1-я — «Сменить почту» (компакт), 2–5 — крупные */
+        div[data-testid="stHorizontalBlock"]:has(> div:nth-child(5)) > div:nth-child(1) button[kind="primary"] {
+            width: 100% !important;
+            font-weight: 600 !important;
+            padding: 0.28rem 0.4rem !important;
+            font-size: 0.7rem !important;
+            min-height: 2rem !important;
+            line-height: 1.15 !important;
+            border-radius: 0.35rem !important;
+            background: linear-gradient(180deg, #3b8eed 0%, #1c7ed6 100%) !important;
+            border: 1px solid #1864ab !important;
+            color: #ffffff !important;
+        }
+        div[data-testid="stHorizontalBlock"]:has(> div:nth-child(5)) > div:nth-child(n+2) button[kind="primary"] {
+            width: 100% !important;
+            font-weight: 600 !important;
+            padding-top: 0.55rem !important;
+            padding-bottom: 0.55rem !important;
+            background: linear-gradient(180deg, #3b8eed 0%, #1c7ed6 100%) !important;
+            border: 1px solid #1864ab !important;
+            color: #ffffff !important;
+        }
+        /* Дубль в шапке справа от заголовка — компактная синяя */
+        section[data-testid="stMain"] div[data-testid="stHorizontalBlock"]:has(h1) .stButton > button[kind="primary"] {
+            width: 100% !important;
+            font-weight: 600 !important;
+            padding: 0.28rem 0.55rem !important;
+            font-size: 0.72rem !important;
+            min-height: 2rem !important;
+            line-height: 1.2 !important;
+            border-radius: 0.35rem !important;
+            background: linear-gradient(180deg, #3b8eed 0%, #1c7ed6 100%) !important;
+            border: 1px solid #1864ab !important;
+            color: #ffffff !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
     )
 
     svc = sheets_service_cached("ADC" if _use_adc else _SA_JSON_KEY, _use_adc)
@@ -170,26 +307,13 @@ def main():
         except Exception:
             st.info(msg)
 
-    st.markdown(
-        """
-        <style>
-        div[data-testid="stHorizontalBlock"]:has(> div:nth-child(4)) button[kind="primary"] {
-            width: 100% !important;
-            font-weight: 600 !important;
-            padding-top: 0.55rem !important;
-            padding-bottom: 0.55rem !important;
-            background: linear-gradient(180deg, #3b8eed 0%, #1c7ed6 100%) !important;
-            border: 1px solid #1864ab !important;
-            color: #ffffff !important;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
     if "imap_sync_report" not in st.session_state:
         st.session_state.imap_sync_report = None
 
-    qa1, qa2, qa3, qa4 = st.columns(4, gap="small")
+    qa0, qa1, qa2, qa3, qa4 = st.columns([0.95, 1.05, 1.05, 1.05, 1.05], gap="small")
+    with qa0:
+        if st.button("Сменить почту", key="qa_row_change_mail", type="primary", use_container_width=True):
+            st.session_state.mail_settings_panel = not st.session_state.mail_settings_panel
     with qa1:
         if st.button("Прочитать почту", key="qa_mail", use_container_width=True, type="primary"):
             gu, gp = _gmail_imap_credentials(_secrets())
@@ -199,12 +323,24 @@ def main():
                     "rows_appended": 0,
                     "emails_marked_read": 0,
                     "skipped": [],
+                    "unseen_total": 0,
+                    "capped": False,
+                    "payment_followup_rows": 0,
+                    "payment_options_enabled": False,
+                    "payment_reference_empty": False,
+                    "payment_reply_sent": 0,
+                    "payment_reply_errors": [],
                     "errors": [
-                        "Нет доступа к почте: задайте в Secrets **GMAIL_IMAP_USER** и **GMAIL_IMAP_APP_PASSWORD** "
-                        "(или **GMAIL_SMTP_USER** / **GMAIL_SMTP_APP_PASSWORD** — пароль приложения Gmail)."
+                        "Нет доступа к почте: в Streamlit **Settings → Secrets** задайте "
+                        "**GMAIL_IMAP_USER** = `o.tsebulevsky@rantsports.com` и **GMAIL_IMAP_APP_PASSWORD** "
+                        "(пароль **приложения** Google, не обычный пароль входа). "
+                        "Достаточно вместо IMAP указать только **GMAIL_SMTP_USER** / **GMAIL_SMTP_APP_PASSWORD** "
+                        "с тем же логином и паролем приложения — кнопка подхватит их для IMAP. "
+                        "После сохранения Secrets — **Reboot app**."
                     ],
                 }
             else:
+                sm_host, sm_port, sm_user, sm_pass = _gmail_smtp_settings(_secrets_obj)
                 st.session_state.imap_sync_report = sync_unseen_webmasters_to_inbox_sheet(
                     imap_host="imap.gmail.com",
                     imap_user=gu,
@@ -213,7 +349,16 @@ def main():
                     sheets_service=svc,
                     spreadsheet_id=cfg.spreadsheet_inbox_log_id,
                     sheet_gid=cfg.gid_inbox_log,
-                    limit=40,
+                    max_messages=cfg.imap_sync_max_messages,
+                    imap_timeout_sec=cfg.imap_sync_timeout_sec,
+                    payment_options_spreadsheet_id=cfg.spreadsheet_payment_options_id,
+                    payment_options_gid=cfg.gid_payment_options,
+                    imap_newest_first=cfg.imap_sync_newest_first,
+                    auto_reply_payment_followup=cfg.imap_auto_reply_payment_followup,
+                    smtp_host=sm_host,
+                    smtp_port=sm_port,
+                    smtp_user=sm_user,
+                    smtp_password=sm_pass,
                 )
             rep = st.session_state.imap_sync_report
             if rep.get("errors") and rep.get("rows_appended", 0) == 0:
@@ -222,9 +367,12 @@ def main():
                 except Exception:
                     pass
             else:
+                extra = ""
+                if rep.get("payment_reply_sent"):
+                    extra = f" · автоответов SMTP: {rep.get('payment_reply_sent', 0)}"
                 _quick_notify(
                     f"Строк в таблицу: {rep.get('rows_appended', 0)} · "
-                    f"писем помечено прочитанными: {rep.get('emails_marked_read', 0)}"
+                    f"писем помечено прочитанными: {rep.get('emails_marked_read', 0)}{extra}"
                 )
     with qa2:
         if st.button("торг", key="qa_trade", use_container_width=True, type="primary"):
@@ -244,16 +392,39 @@ def main():
                 "Непрочитанные (UNSEEN) из **IMAP** разбираются на сервере: домен из темы (`… for site.com`), "
                 "дополнительные сайты из ссылок в теле, дата письма, черновик **цены** из текста, **Почта** отправителя. "
                 "По одной строке на домен. Колонка **«Цена после торг»** не заполняется (ручной ввод). "
+                "Колонка **F** — черновик ответа про **оплату**: сверка с книгой «Возможности оплаты»; "
+                "если в письме **нет** вариантов оплаты или они **не входят** в ваш справочник — подставляется фраза про USDT/PayPal "
+                "(на **английском**, если в теме/теле нет кириллицы). "
+                "**Отправка письма вебмастеру** делается только если в Secrets включено **`IMAP_AUTO_REPLY_PAYMENT_FOLLOWUP = true`** "
+                "и заданы **GMAIL_SMTP_*** (один раз на письмо, текст из колонки F). Иначе только запись в таблицу. "
+                "Темы вида **«… for site.com»** и **«… your website site.com»** распознаются; UNSEEN обрабатываются **сначала более новые** "
+                "(можно отключить: `IMAP_SYNC_NEWEST_FIRST = false`). "
                 "Письмо помечается прочитанным, если добавлена хотя бы одна строка."
             )
             sid = cfg.spreadsheet_inbox_log_id
             st.markdown(
                 f"Таблица: [открыть в Google Sheets](https://docs.google.com/spreadsheets/d/{sid}/edit#gid={cfg.gid_inbox_log})"
             )
-            m1, m2, m3 = st.columns(3)
-            m1.metric("Писем просмотрено", rep.get("emails_seen", 0))
-            m2.metric("Строк добавлено", rep.get("rows_appended", 0))
-            m3.metric("Помечено прочитанными", rep.get("emails_marked_read", 0))
+            ut = rep.get("unseen_total", 0)
+            if rep.get("capped"):
+                st.warning(
+                    f"В ящике было **{ut}** непрочитанных; обработана только последняя порция "
+                    f"(лимит **IMAP_SYNC_MAX_MESSAGES** в Secrets). Увеличьте лимит или поставьте **0** для всех."
+                )
+            m1, m2, m3, m4, m5, m6 = st.columns(6)
+            m1.metric("UNSEEN в ящике", ut)
+            m2.metric("Писем обработано", rep.get("emails_seen", 0))
+            m3.metric("Строк в таблицу", rep.get("rows_appended", 0))
+            m4.metric("Помечено прочитанными", rep.get("emails_marked_read", 0))
+            m5.metric("Черновик оплаты (стр.)", rep.get("payment_followup_rows", 0))
+            m6.metric("Отправлено SMTP (оплата)", rep.get("payment_reply_sent", 0))
+            for pre in rep.get("payment_reply_errors") or []:
+                st.warning(pre)
+            if rep.get("payment_options_enabled") and rep.get("payment_reference_empty"):
+                st.info(
+                    "В справочнике «Возможности оплаты» не найдено ни одного знакомого метода (USDT, PayPal, карта и т.д.) — "
+                    "колонка F не заполняется. Добавьте явные названия на лист или расширьте шаблоны в **lib/payment_match.py**."
+                )
             for err in rep.get("errors") or []:
                 st.error(err)
             skipped = rep.get("skipped") or []

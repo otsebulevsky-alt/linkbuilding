@@ -80,12 +80,26 @@ Job **`mirror_github_streamlit`** в [`.gitlab-ci.yml`](../.gitlab-ci.yml) вы�
    - **`GOOGLE_SERVICE_ACCOUNT_JSON`** = весь JSON сервисного аккаунта из вашего локального файла ключа (как в [secrets.toml.example](secrets.toml.example)), в тройных кавычках `''' ... '''`.
    - **Не** используйте в облаке `GOOGLE_SERVICE_ACCOUNT_FILE` (файла ключа там нет).
 4. Добавьте строки из локального `.streamlit/secrets.toml`, которые вам нужны: `LINKBUILDER_FILTER`, `LINKBUILDER_ALIASES`, при необходимости `GMAIL_*`, `SPREADSHEET_*`, `GID_*` — по образцу [secrets.toml.example](secrets.toml.example) (скрипт выше уже добавляет `LINKBUILDER_*` по умолчанию).
-5. **Save** → **Reboot app** (или аналог в интерфейсе).
+5. **Почта для кнопки «Прочитать почту»** (иначе будет красная ошибка про IMAP): в тот же блок Secrets добавьте, подставив **свой** пароль приложения Google (16 символов, не пароль входа):
+
+   ```toml
+   GMAIL_SMTP_USER = "o.tsebulevsky@rantsports.com"
+   GMAIL_SMTP_APP_PASSWORD = "xxxx xxxx xxxx xxxx"
+   GMAIL_SMTP_HOST = "smtp.gmail.com"
+   GMAIL_SMTP_PORT = "587"
+   GMAIL_IMAP_USER = "o.tsebulevsky@rantsports.com"
+   GMAIL_IMAP_APP_PASSWORD = "xxxx xxxx xxxx xxxx"
+   IMAP_MAILBOX = "INBOX"
+   ```
+
+   Логин один и тот же; пароль приложения обычно **один** на SMTP и IMAP. Если задать только `GMAIL_SMTP_*`, панель всё равно использует их для чтения почты.
+6. **Save** → **Reboot app** (или аналог в интерфейсе).
 
 ### Этап H. Проверка приложения
 
 1. Откройте выданный URL вида `https://<имя>.streamlit.app`.
 2. Должны открыться вкладки панели; данные из Google Sheets подтянутся, если таблицы расшарены на **`client_email`** из JSON и Secrets сохранены без ошибок.
+3. **Проверка, что Cloud подтянул свежий код:** в серой подписи под заголовком «Панель линкбилдинга» в начале должна быть метка вида **`mail-ui-2026-03-30b`**. Первой в ряду синих кнопок идёт **«Сменить почту»**, затем «Прочитать почту». Если метки нет и кнопок по-прежнему четыре — закоммитьте/push в GitHub-репозиторий приложения и сделайте **Reboot app** в Streamlit.
 
 ### Опционально: локальный `git push` на GitHub с ПК (без CI)
 
