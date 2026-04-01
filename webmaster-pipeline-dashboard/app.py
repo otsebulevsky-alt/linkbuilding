@@ -26,6 +26,7 @@ from googleapiclient.errors import HttpError
 from lib.config import load_config, load_service_account_info, use_google_adc
 from lib.mail_imap import fetch_unread_summaries
 from lib.mail_smtp import send_smtp_html
+from lib.webmaster_inbox_sync import sync_unseen_webmasters_to_inbox_sheet
 from lib.sheets_service import (
     a1_all_columns,
     build_sheets_service,
@@ -185,42 +186,46 @@ def main():
         """,
         unsafe_allow_html=True,
     )
-    if "imap_quick_rows" not in st.session_state:
-        st.session_state.imap_quick_rows = None
-    if "imap_quick_error" not in st.session_state:
-        st.session_state.imap_quick_error = None
+    if "imap_sync_report" not in st.session_state:
+        st.session_state.imap_sync_report = None
 
     qa1, qa2, qa3, qa4 = st.columns(4, gap="small")
     with qa1:
         if st.button("Прочитать почту", key="qa_mail", use_container_width=True, type="primary"):
-            st.session_state.imap_quick_error = None
-            st.session_state.imap_quick_rows = None
             gu, gp = _gmail_imap_credentials(_secrets())
             if not gu or not gp:
-                st.session_state.imap_quick_error = (
-                    "Нет доступа к почте: задайте в Secrets **GMAIL_IMAP_USER** и **GMAIL_IMAP_APP_PASSWORD** "
-                    "(или **GMAIL_SMTP_USER** / **GMAIL_SMTP_APP_PASSWORD** — тот же пароль приложения Gmail)."
-                )
+                st.session_state.imap_sync_report = {
+                    "emails_seen": 0,
+                    "rows_appended": 0,
+                    "emails_marked_read": 0,
+                    "skipped": [],
+                    "errors": [
+                        "Нет доступа к почте: задайте в Secrets **GMAIL_IMAP_USER** и **GMAIL_IMAP_APP_PASSWORD** "
+                        "(или **GMAIL_SMTP_USER** / **GMAIL_SMTP_APP_PASSWORD** — пароль приложения Gmail)."
+                    ],
+                }
             else:
+                st.session_state.imap_sync_report = sync_unseen_webmasters_to_inbox_sheet(
+                    imap_host="imap.gmail.com",
+                    imap_user=gu,
+                    imap_password=gp,
+                    imap_mailbox=cfg.imap_mailbox,
+                    sheets_service=svc,
+                    spreadsheet_id=cfg.spreadsheet_inbox_log_id,
+                    sheet_gid=cfg.gid_inbox_log,
+                    limit=40,
+                )
+            rep = st.session_state.imap_sync_report
+            if rep.get("errors") and rep.get("rows_appended", 0) == 0:
                 try:
-                    st.session_state.imap_quick_rows = fetch_unread_summaries(
-                        host="imap.gmail.com",
-                        user=gu,
-                        password=gp,
-                        mailbox=cfg.imap_mailbox,
-                        limit=40,
-                    )
-                except Exception as e:
-                    st.session_state.imap_quick_error = f"IMAP: {e}"
-            rows = st.session_state.imap_quick_rows
-            err = st.session_state.imap_quick_error
-            if err:
-                try:
-                    st.toast("Не удалось прочитать почту", icon="⚠️")
+                    st.toast("Синхронизация почты: ошибка (см. блок ниже)", icon="⚠️")
                 except Exception:
                     pass
-            elif rows is not None:
-                _quick_notify(f"Непрочитанных писем: {len(rows)}")
+            else:
+                _quick_notify(
+                    f"Строк в таблицу: {rep.get('rows_appended', 0)} · "
+                    f"писем помечено прочитанными: {rep.get('emails_marked_read', 0)}"
+                )
     with qa2:
         if st.button("торг", key="qa_trade", use_container_width=True, type="primary"):
             _quick_notify("Сценарий «торг» — заготовка; логику можно добавить позже.")
@@ -232,27 +237,33 @@ def main():
             _quick_notify("Проверка публикаций — заготовка; позже: сверка статусов с реестром.")
     st.divider()
 
-    if st.session_state.imap_quick_error is not None or st.session_state.imap_quick_rows is not None:
-        with st.expander("📬 Ответы вебмастеров (непрочитанные по IMAP)", expanded=True):
+    if st.session_state.imap_sync_report is not None:
+        rep = st.session_state.imap_sync_report
+        with st.expander("📬 Синхронизация ответов вебмастеров → таблица «Сбор с ответов»", expanded=True):
             st.caption(
-                "Это **не** ИИ-агент в браузере: сервер Streamlit подключается к **Gmail по IMAP** с паролем из Secrets. "
-                "Показаны письма со статусом непрочитанное (UNSEEN) в ящике **INBOX** (или как задано в `IMAP_MAILBOX`)."
+                "Непрочитанные (UNSEEN) из **IMAP** разбираются на сервере: домен из темы (`… for site.com`), "
+                "дополнительные сайты из ссылок в теле, дата письма, черновик **цены** из текста, **Почта** отправителя. "
+                "По одной строке на домен. Колонка **«Цена после торг»** не заполняется (ручной ввод). "
+                "Письмо помечается прочитанным, если добавлена хотя бы одна строка."
             )
-            if st.session_state.imap_quick_error:
-                st.error(st.session_state.imap_quick_error)
-            else:
-                rows = st.session_state.imap_quick_rows or []
-                if not rows:
-                    st.info("Нет непрочитанных писем.")
-                else:
-                    st.dataframe(
-                        pd.DataFrame(rows),
-                        use_container_width=True,
-                        height=min(480, 72 + 36 * len(rows)),
-                    )
-            if st.button("Скрыть блок почты", key="imap_quick_clear"):
-                st.session_state.imap_quick_rows = None
-                st.session_state.imap_quick_error = None
+            sid = cfg.spreadsheet_inbox_log_id
+            st.markdown(
+                f"Таблица: [открыть в Google Sheets](https://docs.google.com/spreadsheets/d/{sid}/edit#gid={cfg.gid_inbox_log})"
+            )
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Писем просмотрено", rep.get("emails_seen", 0))
+            m2.metric("Строк добавлено", rep.get("rows_appended", 0))
+            m3.metric("Помечено прочитанными", rep.get("emails_marked_read", 0))
+            for err in rep.get("errors") or []:
+                st.error(err)
+            skipped = rep.get("skipped") or []
+            if skipped:
+                st.warning("Пропущены (не извлечён домен из темы/ссылок):")
+                st.dataframe(pd.DataFrame(skipped), use_container_width=True, height=min(220, 60 + 28 * len(skipped)))
+            if not rep.get("errors") and rep.get("emails_seen", 0) == 0:
+                st.info("Нет непрочитанных писем в ящике.")
+            if st.button("Скрыть отчёт", key="imap_sync_clear"):
+                st.session_state.imap_sync_report = None
                 st.rerun()
 
     tab_stats, tab_reg, tab_wait, tab_inbox, tab_calc, tab_pay = st.tabs(

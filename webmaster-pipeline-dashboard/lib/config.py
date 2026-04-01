@@ -30,6 +30,7 @@ class AppConfig:
     gid_calculator_tab_primary: int
     gid_calculator_tab_secondary: int
     gid_payment_options: int
+    gid_inbox_log: int
 
     linkbuilder_filter: str
     status_prep_text: str
@@ -123,6 +124,7 @@ def load_config(secrets: Any | None = None) -> AppConfig:
         gid_calculator_tab_primary=_secrets_get_int(secrets, "GID_CALCULATOR_TAB_1", 225938948),
         gid_calculator_tab_secondary=_secrets_get_int(secrets, "GID_CALCULATOR_TAB_2", 0),
         gid_payment_options=_secrets_get_int(secrets, "GID_PAYMENT_OPTIONS", 0),
+        gid_inbox_log=_secrets_get_int(secrets, "GID_INBOX_LOG", 0),
         linkbuilder_filter=_secrets_get(secrets, "LINKBUILDER_FILTER", _env("LINKBUILDER_FILTER", "Олег")),
         status_prep_text=_secrets_get(secrets, "STATUS_PREP_TEXT", "Подготовка текста"),
         status_wait_publish=_secrets_get(secrets, "STATUS_WAIT_PUBLISH", "Жду публикации"),
