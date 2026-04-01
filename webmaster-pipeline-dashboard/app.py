@@ -169,8 +169,8 @@ def main():
             font-weight: 600 !important;
             padding-top: 0.55rem !important;
             padding-bottom: 0.55rem !important;
-            background: linear-gradient(180deg, #ff6b6b 0%, #ee5a6f 100%) !important;
-            border: 1px solid #e03131 !important;
+            background: linear-gradient(180deg, #3b8eed 0%, #1c7ed6 100%) !important;
+            border: 1px solid #1864ab !important;
             color: #ffffff !important;
         }
         </style>
