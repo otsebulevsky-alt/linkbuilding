@@ -54,6 +54,8 @@ Job **`mirror_github_streamlit`** в [`.gitlab-ci.yml`](../.gitlab-ci.yml) вы�
 3. Откройте запущенный pipeline → дождитесь стадии **deploy** → job **`mirror_github_streamlit`**.
 4. Если job **зелёная** — ветка отправлена на GitHub. Если **красная** — откройте лог job: частые причины — неверный токен, нет прав `repo`, репозиторий GitHub не существует или переименован.
 
+**Если пайплайн долго `Pending` с меткой `stuck`:** свободный runner с Docker для проекта не назначен (типично для self-managed GitLab). На feature-ветках после коммита `f9edb65` в CI остаётся одна job `mirror_github_streamlit`; если она всё равно stuck — обходите CI: локальный **`git push github <ветка>`** (см. «Опционально: локальный git push» ниже). Старый stuck-пайплайн (например на коммите `f866137`) можно **Cancel** — он от старой конфигурации; обновите страницу списка пайплайнов и смотрите **верхний** запуск по **актуальному** SHA.
+
 ### Этап E. Проверка GitHub
 
 1. Откройте [github.com/otsebulevsky-alt/linkbuilding](https://github.com/otsebulevsky-alt/linkbuilding).
