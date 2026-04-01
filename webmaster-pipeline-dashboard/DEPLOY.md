@@ -117,14 +117,15 @@ Streamlit читает **GitHub**, вы пушите в **GitLab**. После `
 
 | Шаг | Куда перейти |
 |-----|----------------|
-| Проект **linkbuilding** в GitLab | [https://rantsports.gitlab.yandexcloud.net/iam/internal/seo/linkbuilding](https://rantsports.gitlab.yandexcloud.net/iam/internal/seo/linkbuilding) |
-| **CI/CD → Variables** (проверить / добавить `GITHUB_TOKEN`) | [https://rantsports.gitlab.yandexcloud.net/iam/internal/seo/linkbuilding/-/settings/ci_cd](https://rantsports.gitlab.yandexcloud.net/iam/internal/seo/linkbuilding/-/settings/ci_cd) (блок **Variables** внизу страницы) |
-| **CI/CD → Pipelines** (найти пайплайн по ветке после push) | [https://rantsports.gitlab.yandexcloud.net/iam/internal/seo/linkbuilding/-/pipelines](https://rantsports.gitlab.yandexcloud.net/iam/internal/seo/linkbuilding/-/pipelines) |
-| Запуск пайплайна вручную | [https://rantsports.gitlab.yandexcloud.net/iam/internal/seo/linkbuilding/-/pipelines/new](https://rantsports.gitlab.yandexcloud.net/iam/internal/seo/linkbuilding/-/pipelines/new) → ветка **`feature/seolb-164-webmaster-prospecting-oleg`** → **Run pipeline** |
+| Проект **linkbuilding** в GitLab | [https://rantsports.gitlab.yandexcloud.net/ai-first-workspace/internal/seo/linkbuilding](https://rantsports.gitlab.yandexcloud.net/ai-first-workspace/internal/seo/linkbuilding) |
+| **CI/CD → Variables** (проверить / добавить `GITHUB_TOKEN`) | [https://rantsports.gitlab.yandexcloud.net/ai-first-workspace/internal/seo/linkbuilding/-/settings/ci_cd](https://rantsports.gitlab.yandexcloud.net/ai-first-workspace/internal/seo/linkbuilding/-/settings/ci_cd) (блок **Variables** внизу страницы) |
+| **CI/CD → Pipelines** (найти пайплайн по ветке после push) | [https://rantsports.gitlab.yandexcloud.net/ai-first-workspace/internal/seo/linkbuilding/-/pipelines](https://rantsports.gitlab.yandexcloud.net/ai-first-workspace/internal/seo/linkbuilding/-/pipelines) |
+| Запуск пайплайна вручную | [https://rantsports.gitlab.yandexcloud.net/ai-first-workspace/internal/seo/linkbuilding/-/pipelines/new](https://rantsports.gitlab.yandexcloud.net/ai-first-workspace/internal/seo/linkbuilding/-/pipelines/new) → ветка **`feature/seolb-164-webmaster-prospecting-oleg`** → **Run pipeline** |
 | Репозиторий на **GitHub** (куда зеркалит CI) | [https://github.com/otsebulevsky-alt/linkbuilding](https://github.com/otsebulevsky-alt/linkbuilding) |
 | Ветка на GitHub (проверить свежий коммит) | [https://github.com/otsebulevsky-alt/linkbuilding/tree/feature/seolb-164-webmaster-prospecting-oleg](https://github.com/otsebulevsky-alt/linkbuilding/tree/feature/seolb-164-webmaster-prospecting-oleg) |
 | Создать **Personal Access Token** (classic, scope **repo**) для `GITHUB_TOKEN` | [https://github.com/settings/tokens](https://github.com/settings/tokens) → **Generate new token (classic)** |
 | Панель **Streamlit Community Cloud** | [https://share.streamlit.io/](https://share.streamlit.io/) → своё приложение → **⋮** → **Reboot app** |
+| Создать **Merge Request** из ветки feature (после push) | [https://rantsports.gitlab.yandexcloud.net/ai-first-workspace/internal/seo/linkbuilding/-/merge_requests/new?merge_request%5Bsource_branch%5D=feature%2Fseolb-164-webmaster-prospecting-oleg](https://rantsports.gitlab.yandexcloud.net/ai-first-workspace/internal/seo/linkbuilding/-/merge_requests/new?merge_request%5Bsource_branch%5D=feature%2Fseolb-164-webmaster-prospecting-oleg) |
 
 **Краткий порядок:** push в GitLab → открыть **Pipelines** → убедиться, что job **`mirror_github_streamlit`** **зелёный** → открыть ветку на **GitHub** и проверить коммит → **Reboot** в Streamlit.
 
