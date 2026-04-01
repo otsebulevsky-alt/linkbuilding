@@ -1,36 +1,15 @@
-# You can override the included template(s) by including variable overrides
-# SAST customization: https://docs.gitlab.com/ee/user/application_security/sast/#customizing-the-sast-settings
-# Secret Detection customization: https://docs.gitlab.com/user/application_security/secret_detection/pipeline/configure
-# Dependency Scanning customization: https://docs.gitlab.com/ee/user/application_security/dependency_scanning/#customizing-the-dependency-scanning-settings
-# Container Scanning customization: https://docs.gitlab.com/ee/user/application_security/container_scanning/#customizing-the-container-scanning-settings
-# Note that environment variables can be set in several places
-# See https://docs.gitlab.com/ee/ci/variables/#cicd-variable-precedence
+# На feature-ветках — только mirror в GitHub (одна лёгкая Docker-джоба), без Auto-DevOps.
+# Иначе пайплайн зависает в «stuck»: очередь из десятков джоб без подходящих runner'ов.
+# Полный Auto-DevOps — в .gitlab-ci-autodevops.yml (только $CI_DEFAULT_BRANCH).
+workflow:
+  rules:
+    - when: always
+
 stages:
-- build
-- test
-- deploy
-- review
-- dast
-- staging
-- canary
-- production
-- incremental rollout 10%
-- incremental rollout 25%
-- incremental rollout 50%
-- incremental rollout 100%
-- performance
-- cleanup
-- secret-detection
-variables:
-  SECRET_DETECTION_ENABLED: 'true'
-secret_detection:
-  stage: secret-detection
-include:
-- template: Auto-DevOps.gitlab-ci.yml
+  - deploy
 
 # Push current branch to GitHub (Streamlit Community Cloud reads only GitHub).
 # Set CI/CD variable GITHUB_TOKEN: classic PAT with "repo" scope (GitHub account that owns github.com/otsebulevsky-alt/linkbuilding).
-# Bypasses wrong Windows Credential Manager (403 as olegtseb9806).
 mirror_github_streamlit:
   stage: deploy
   image: alpine/git:latest
@@ -46,8 +25,7 @@ mirror_github_streamlit:
     - git remote add github "https://oauth2:${GITHUB_TOKEN}@github.com/otsebulevsky-alt/linkbuilding.git"
     - git push github "HEAD:refs/heads/${CI_COMMIT_REF_NAME}"
 
-# Auto-DevOps.gitlab-ci.yml задаёт workflow:rules без web/push на feature — GitLab пишет
-# «Pipeline cannot be run. Review the workflow:rules». Этот блок идёт после include и переопределяет workflow.
-workflow:
-  rules:
-    - when: always
+include:
+  - local: .gitlab-ci-autodevops.yml
+    rules:
+      - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
