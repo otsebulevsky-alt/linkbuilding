@@ -59,7 +59,7 @@ Job **`mirror_github_streamlit`** в [`.gitlab-ci.yml`](../.gitlab-ci.yml) вы�
 ### Этап E. Проверка GitHub
 
 1. Откройте [github.com/otsebulevsky-alt/linkbuilding](https://github.com/otsebulevsky-alt/linkbuilding).
-2. Должна отображаться ветка **`feature/seolb-164-webmaster-prospecting-oleg`** и папка **`webmaster-pipeline-dashboard`** с файлами (`app.py`, `requirements.txt` и т.д.).
+2. Должна отображаться ветка **`feature/seolb-164-webmaster-prospecting-oleg`**, папка **`webmaster-pipeline-dashboard`** (`app.py`, `lib/` …) и в **корне** репо — **[`requirements.txt`](../requirements.txt)** (единственный манифест зависимостей).
 
 ### Этап F. Streamlit Community Cloud — деплой
 
@@ -68,7 +68,7 @@ Job **`mirror_github_streamlit`** в [`.gitlab-ci.yml`](../.gitlab-ci.yml) вы�
 3. Заполните форму [share.streamlit.io/deploy](https://share.streamlit.io/deploy):
    - **Repository:** `otsebulevsky-alt/linkbuilding`
    - **Branch:** `feature/seolb-164-webmaster-prospecting-oleg`
-   - **Main file path:** `app.py` **(корень репозитория)** или `webmaster-pipeline-dashboard/app.py` — в корне есть шим [`app.py`](../app.py), подключающий дашборд; в корне также [`requirements.txt`](../requirements.txt) (`-r webmaster-pipeline-dashboard/...`), чтобы Cloud ставил зависимости без ручного пути.
+   - **Main file path (рекомендуется):** `webmaster-pipeline-dashboard/app.py`, **App root** пустой — один процесс Streamlit, без шима `importlib`. **Альтернатива:** корневой [`app.py`](../app.py) (шим с `chdir` + загрузка дашборда). Зависимости только из **корневого** [`requirements.txt`](../requirements.txt) (**без** второго `requirements.txt` во вложенной папке и без `-r`, иначе в логах **«More than one requirement file»** и возможны **segfault** после установки пакетов).
    - **App URL (optional):** любое свободное имя (например `linkbuilding-webmaster`).
    - **Python version** (в **Advanced settings** при первом деплое или **Manage app → Settings → General**): выберите **3.12** (семейство 3.12.x). Это соответствует [дефолту Community Cloud](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/deploy). **Не используйте Python 3.14** (и другие экспериментальные): с бинарными колёсами (`pandas`, `google-*`) процесс может падать с **`corrupted unsorted chunks`** и общим **«Oh no»** даже после успешной установки зависимостей.
    - **App root:** при **Main file path** = корневой `app.py` поле **App root** / **Main module directory** оставьте **пустым** (корень репозитория). Если путь к файлу = `webmaster-pipeline-dashboard/app.py`, можно задать **App root** = `webmaster-pipeline-dashboard`.
@@ -104,7 +104,7 @@ Job **`mirror_github_streamlit`** в [`.gitlab-ci.yml`](../.gitlab-ci.yml) вы�
 
 1. Откройте выданный URL вида `https://<имя>.streamlit.app`.
 2. Должны открыться вкладки панели; данные из Google Sheets подтянутся, если таблицы расшарены на **`client_email`** из JSON и Secrets сохранены без ошибок.
-3. **Проверка, что Cloud подтянул свежий код:** в серой подписи под заголовком «Панель линкбилдинга» в начале должна быть метка вида **`mail-ui-2026-04-02b`** (или новее). **«Сменить почту»** — **справа от заголовка**; в форме — **логин** и при необходимости **пароль приложения** (можно только на сессию, без Secrets). Ниже — четыре синие кнопки. Если метки нет — push на GitHub и **Reboot app**.
+3. **Проверка, что Cloud подтянул свежий код:** в серой подписи под заголовком «Панель линкбилдинга» в начале должна быть метка вида **`mail-ui-2026-04-02d`** (или новее). **«Сменить почту»** — **справа от заголовка**; в форме — **логин** и при необходимости **пароль приложения** (можно только на сессию, без Secrets). Ниже — четыре синие кнопки. Если метки нет — push на GitHub и **Reboot app**.
 
 ### Опционально: локальный `git push` на GitHub с ПК (без CI)
 
@@ -245,15 +245,17 @@ git push -u github feature/seolb-164-webmaster-prospecting-oleg
 
 1. **Версия Python в приложении:** **Manage app → Settings → General → Python version**. Должно быть **3.12** (или стабильная 3.11), **не 3.14**. При 3.14 в логах нередко встречается **`corrupted unsorted chunks`** — смените на **3.12**, **Save**, затем **Reboot app**. По документации Streamlit смена мажорной версии Python иногда требует пересоздать приложение; если после смены и перезапуска ошибка остаётся — удалите приложение и задеплойте снова с **Advanced settings → Python 3.12** (сохраните Secrets и URL в заметку заранее).
 
-2. **Порт / bind:** в [`.streamlit/config.toml`](.streamlit/config.toml) не должно быть **`server.port`** (например 8503) и **`server.address = "127.0.0.1"`** — иначе health check Cloud не проходит. Локальный порт **8503** — через [run.ps1](run.ps1).
+2. **Segmentation fault сразу после «Processed dependencies»:** убедитесь, что в репозитории **один** файл **`requirements.txt`** (в корне зеркала `linkbuilding`), без вложенного второго и без строки **`-r .../requirements.txt`**. В логах предупреждение **«More than one requirement file»** — признак; зафиксированы версии в корневом файле (см. коммит с сообщением про single requirements). Дополнительно переключите **Main file path** на **`webmaster-pipeline-dashboard/app.py`** и оставьте **App root** пустым.
 
-3. **Точка входа и корень:** если в настройках приложения **Main file path** = `app.py`, а **App root** = `webmaster-pipeline-dashboard`, Cloud ищет файл по пути `webmaster-pipeline-dashboard/app.py` внутри подпапки — получается неверный путь. Либо **App root** пустой и **Main file path** = корневой [`app.py`](../app.py) (шим), либо **Main file path** = `webmaster-pipeline-dashboard/app.py` и **App root** пустой или совпадает с документацией Cloud для монорепо.
+3. **Порт / bind:** в [`.streamlit/config.toml`](.streamlit/config.toml) не должно быть **`server.port`** (например 8503) и **`server.address = "127.0.0.1"`** — иначе health check Cloud не проходит. Локальный порт **8503** — через [run.ps1](run.ps1).
 
-4. **Зависимости:** в корне репозитория должен быть [`requirements.txt`](../requirements.txt) (указывает на `webmaster-pipeline-dashboard/requirements.txt`), иначе при деплое из корня пакеты могут не совпасть с тем, что нужно дашборду.
+4. **Точка входа и корень:** если в настройках приложения **Main file path** = `app.py`, а **App root** = `webmaster-pipeline-dashboard`, Cloud ищет файл по пути `webmaster-pipeline-dashboard/app.py` внутри подпапки — получается неверный путь. Либо **App root** пустой и **Main file path** = корневой [`app.py`](../app.py) (шим), либо **Main file path** = `webmaster-pipeline-dashboard/app.py` и **App root** пустой или совпадает с документацией Cloud для монорепо.
 
-5. **Текст ошибки:** в [`webmaster-pipeline-dashboard/.streamlit/config.toml`](.streamlit/config.toml) включено **`[client] showErrorDetails = true`** — на странице приложения может появиться traceback (не только «Oh no»).
+5. **Зависимости:** в корне репозитория — **единственный** [`requirements.txt`](../requirements.txt) со всеми пакетами дашборда (без `-r` на второй файл).
 
-6. **Секреты ещё не заданы:** приложение должно открываться и без блока Secrets (почта через «Сменить почту»). Если в логах **`StreamlitSecretNotFoundError`** при чтении Gmail — в коде не должно быть **`st.secrets or {}`** и прямого **`.get()`** на `st.secrets`; чтение ключей — как в `lib.config._secrets_get` (исправлено в коммите `589c898`).
+6. **Текст ошибки:** в [`webmaster-pipeline-dashboard/.streamlit/config.toml`](.streamlit/config.toml) включено **`[client] showErrorDetails = true`** — на странице приложения может появиться traceback (не только «Oh no»).
+
+7. **Секреты ещё не заданы:** приложение должно открываться и без блока Secrets (почта через «Сменить почту»). Если в логах **`StreamlitSecretNotFoundError`** при чтении Gmail — в коде не должно быть **`st.secrets or {}`** и прямого **`.get()`** на `st.secrets`; чтение ключей — как в `lib.config._secrets_get` (исправлено в коммите `589c898`).
 
 После исправления: **commit → push** на GitHub → в Cloud **Reboot** / **Redeploy**.
 
@@ -262,8 +264,9 @@ git push -u github feature/seolb-164-webmaster-prospecting-oleg
 ## Чеклист после деплоя
 
 - [ ] **Python version** в **Settings → General** = **3.12** (не 3.14).
+- [ ] В логах нет **«More than one requirement file»**; **Main file path** = `webmaster-pipeline-dashboard/app.py` (рекомендуется).
 - [ ] Таблицы Google расшарены на `client_email` из JSON.
 - [ ] В облаке задан `GOOGLE_SERVICE_ACCOUNT_JSON` (или эквивалент через env в Docker).
 - [ ] Книга «Возможности оплаты» (`17MoDWn…`) открыта для SA, если нужна вкладка «Варианты оплаты».
 
-**Последнее обновление:** 2026-04-01 (Python 3.12 на Cloud, метка билда UI, Secrets)
+**Последнее обновление:** 2026-04-01 (один requirements.txt, segfault / два манифеста, Python 3.12)

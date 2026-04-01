@@ -74,20 +74,16 @@
 ## Часть D. Локальный запуск на Windows (проверка перед облаком)
 
 1. Установите Python 3.11+ с [python.org](https://www.python.org/downloads/) если ещё не установлен.
-2. В терминале перейдите в папку приложения (не в корень `start/`):
+2. В терминале: корень репозитория `linkbuilding` → `pip install` → папка приложения:
 
 ```text
-cd C:\project\start\internal\seo\linkbuilding\webmaster-pipeline-dashboard
-```
-
-3. Установите зависимости:
-
-```text
+cd C:\project\start\internal\seo\linkbuilding
 py -m pip install -r requirements.txt
+cd webmaster-pipeline-dashboard
 ```
 
-4. Скопируйте [secrets.toml.example](secrets.toml.example) в **`.streamlit/secrets.toml`** и заполните: ключ (`GOOGLE_SERVICE_ACCOUNT_JSON` **или** файл `gcp-service-account.json` + `GOOGLE_SERVICE_ACCOUNT_FILE`), SMTP, фильтры и т.д.
-5. Запуск:
+3. Скопируйте [secrets.toml.example](secrets.toml.example) в **`.streamlit/secrets.toml`** и заполните: ключ (`GOOGLE_SERVICE_ACCOUNT_JSON` **или** файл `gcp-service-account.json` + `GOOGLE_SERVICE_ACCOUNT_FILE`), SMTP, фильтры и т.д.
+4. Запуск:
 
 ```text
 py -m streamlit run app.py
@@ -99,9 +95,9 @@ py -m streamlit run app.py
 powershell -ExecutionPolicy Bypass -File C:\project\start\internal\seo\linkbuilding\webmaster-pipeline-dashboard\run.ps1
 ```
 
-6. Откройте в браузере: по умолчанию **[http://localhost:8503](http://localhost:8503)** (см. [`.streamlit/config.toml`](.streamlit/config.toml)).
+5. Откройте в браузере: по умолчанию **[http://localhost:8503](http://localhost:8503)** (см. [`.streamlit/config.toml`](.streamlit/config.toml)).
 
-7. **Автозапуск Windows** (по желанию): один раз выполните из корня `start/`:
+6. **Автозапуск Windows** (по желанию): один раз выполните из корня `start/`:
 
 ```text
 powershell -ExecutionPolicy Bypass -File internal/seo/linkbuilding/webmaster-pipeline-dashboard/scripts/install-autostart.ps1
@@ -116,13 +112,9 @@ powershell -ExecutionPolicy Bypass -File internal/seo/linkbuilding/webmaster-pip
 1. Убедитесь, что изменения с панелью **закоммичены** и **запушены** в удалённый репозиторий (GitHub удобнее для входа в Streamlit).
 2. Откройте **[share.streamlit.io](https://share.streamlit.io)** и войдите (часто через **GitHub**).
 3. **New app** → выберите **репозиторий** и **ветку** (например `main`).
-4. Укажите **Main file path** от корня репозитория:
+4. Укажите **Main file path** от корня репозитория (зеркало GitHub `linkbuilding`): **`webmaster-pipeline-dashboard/app.py`**, **App root** пустой. Зависимости — только корневой [`requirements.txt`](../requirements.txt).
 
-   `internal/seo/linkbuilding/webmaster-pipeline-dashboard/app.py`
-
-5. Если в форме есть **App root** / **Root directory** / **Working directory**, укажите:
-
-   `internal/seo/linkbuilding/webmaster-pipeline-dashboard`
+5. Если используете только монорепо `start/` без зеркала — путь к `app.py` будет с префиксом `internal/seo/linkbuilding/...`; для Streamlit Cloud обычно деплой с отдельного репо `linkbuilding`, см. [DEPLOY.md](DEPLOY.md).
 
 6. Нажмите **Deploy** и дождитесь успешного деплоя. Откройте выданный URL вида `https://<имя>.streamlit.app`.
 

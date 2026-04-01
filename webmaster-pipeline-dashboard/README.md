@@ -91,11 +91,14 @@
 
 **Важно:** `app.py` лежит **не** в корне `start/`, а в этой папке. Если в терминале было `C:\project\start>` и ошибка `File does not exist: app.py` — сначала перейдите в каталог приложения.
 
-От корня репозитория (`start/`):
+Зависимости задаются **одним** файлом [`requirements.txt`](../requirements.txt) в корне репозитория `linkbuilding` (так Streamlit Cloud не видит два манифеста).
+
+От корня репозитория `linkbuilding` (в workspace: `internal/seo/linkbuilding`):
 
 ```bash
-cd internal/seo/linkbuilding/webmaster-pipeline-dashboard
+cd internal/seo/linkbuilding
 py -m pip install -r requirements.txt
+cd webmaster-pipeline-dashboard
 mkdir .streamlit
 copy secrets.toml.example .streamlit\secrets.toml
 # Edit .streamlit\secrets.toml — keys, SMTP, etc.
@@ -134,12 +137,8 @@ powershell -ExecutionPolicy Bypass -File C:\project\start\internal\seo\linkbuild
 1. Закоммитьте и отправьте в **Git** репозиторий, где есть путь `internal/seo/linkbuilding/webmaster-pipeline-dashboard/` (удобнее **GitHub** — вход в Streamlit Cloud через GitHub).
 2. Зайдите на [share.streamlit.io](https://share.streamlit.io) → **Sign in** → **New app**.
 3. Выберите репозиторий и ветку (например `main`).
-4. **Main file path** (от корня репо):  
-   `internal/seo/linkbuilding/webmaster-pipeline-dashboard/app.py`
-5. Если в форме есть поле **App root** / **Root directory** / **Working directory**, укажите:  
-   `internal/seo/linkbuilding/webmaster-pipeline-dashboard`  
-   Тогда `requirements.txt` и `runtime.txt` подхватятся из этой папки.
-6. **Deploy**. Дождитесь зелёного статуса и откройте выданный URL.
+4. **Main file path** (рекомендуется): `webmaster-pipeline-dashboard/app.py` — один процесс Streamlit без корневого шима; **App root** пустой. `requirements.txt` лежит в **корне** репозитория `linkbuilding`. Альтернатива: корневой `app.py` (шим) при том же корневом `requirements.txt`.
+5. **Deploy**. Дождитесь зелёного статуса и откройте выданный URL.
 7. **Settings** (шестерёнка у приложения) → **Secrets** — вставьте TOML по образцу [secrets.toml.example](secrets.toml.example). В облаке **нет** файла `.streamlit/gcp-service-account.json`, поэтому обязательно задайте **`GOOGLE_SERVICE_ACCOUNT_JSON`** (весь JSON сервисного аккаунта в тройных кавычках `'''...'''` или одной строкой). Остальное: SMTP, `LINKBUILDER_FILTER`, при необходимости `LINKBUILDER_ALIASES`.
 8. **Reboot app** после сохранения Secrets.
 

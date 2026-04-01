@@ -1,2 +1,8 @@
-# Streamlit Cloud installs from repo root by default.
--r webmaster-pipeline-dashboard/requirements.txt
+# Единственный манифест для Streamlit Community Cloud (без второго requirements и без `-r`).
+# Раньше корневой файл делал `-r webmaster-pipeline-dashboard/requirements.txt` → предупреждение
+# «More than one requirement file» и нестабильное разрешение зависимостей (вплоть до segfault).
+streamlit==1.36.0
+pandas==2.2.3
+google-api-python-client==2.154.0
+google-auth==2.36.0
+google-auth-httplib2==0.2.0

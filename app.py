@@ -1,6 +1,7 @@
-"""Streamlit entry at repo root (Community Cloud: Main file path = `app.py`).
+"""Streamlit entry at repo root (Community Cloud: опционально Main file path = `app.py`).
 
-Loads `webmaster-pipeline-dashboard/app.py` with correct cwd and sys.path for `lib/`.
+Предпочтительно в Cloud: **Main file path** = `webmaster-pipeline-dashboard/app.py` (без этого шима).
+Зависимости — только корневой `requirements.txt` (один манифест, без `-r` на второй файл).
 """
 
 from __future__ import annotations
