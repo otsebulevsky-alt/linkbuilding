@@ -256,7 +256,7 @@ git push -u github feature/seolb-164-webmaster-prospecting-oleg
 
 1. **Версия Python в приложении:** **Manage app → Settings → General → Python version**. Должно быть **3.12** (или стабильная 3.11), **не 3.14**. При 3.14 в логах нередко встречается **`corrupted unsorted chunks`** — смените на **3.12**, **Save**, затем **Reboot app**. По документации Streamlit смена мажорной версии Python иногда требует пересоздать приложение; если после смены и перезапуска ошибка остаётся — удалите приложение и задеплойте снова с **Advanced settings → Python 3.12** (сохраните Secrets и URL в заметку заранее).
 
-2. **Segmentation fault сразу после «Processed dependencies»:** убедитесь, что в репозитории **один** файл **`requirements.txt`** (в корне зеркала `linkbuilding`), без вложенного второго и без строки **`-r .../requirements.txt`**. В логах предупреждение **«More than one requirement file»** — признак. В корневом [`requirements.txt`](../requirements.txt) зафиксированы **`pyarrow==14.0.2`**, **`protobuf==4.25.3`**, **`pandas==2.1.4`** вместе со **`streamlit==1.36.0`** — чтобы `uv` не подтянул слишком новые нативные колёса (типичная причина segfault при запуске `streamlit`). Если после push и **Reboot** падение остаётся — в **Settings → General** попробуйте **Python 3.11** вместо 3.12, затем снова **Reboot**. Дополнительно переключите **Main file path** на **`webmaster-pipeline-dashboard/app.py`** и оставьте **App root** пустым.
+2. **Segmentation fault / health check `EOF` сразу после «Processed dependencies»:** (а) В **корне** зеркала GitHub `linkbuilding` (рядом с `requirements.txt`) должен быть **[`runtime.txt`](../runtime.txt)** со строкой **`python-3.12.8`**. Установщик **uv** на Community Cloud часто **не** подхватывает `runtime.txt` только из `webmaster-pipeline-dashboard/` — тогда может подняться **Python 3.13+**, и **`streamlit`** падает с **segfault**. **Commit → push** на GitHub, **Reboot app**. (б) Один корневой **`requirements.txt`**, без второго файла и без **`-r ...`**. Пины **`pyarrow==14.0.2`**, **`protobuf==4.25.3`**, **`pandas==2.1.4`**, **`streamlit==1.36.0`**. (в) В **Settings → General** вручную **Python 3.12** (не 3.14), **Save**, **Reboot**; при необходимости **Python 3.11** и **Main file path** = **`webmaster-pipeline-dashboard/app.py`**, **App root** пустой.
 
 3. **Порт / bind:** в [`.streamlit/config.toml`](.streamlit/config.toml) не должно быть **`server.port`** (например 8503) и **`server.address = "127.0.0.1"`** — иначе health check Cloud не проходит. Локальный порт **8503** — через [run.ps1](run.ps1).
 
@@ -281,7 +281,8 @@ git push -u github feature/seolb-164-webmaster-prospecting-oleg
 ## Чеклист после деплоя
 
 - [ ] **Python version** в **Settings → General** = **3.12** (не 3.14).
-- [ ] В логах зависимости ставятся из **`.../requirements.txt` в корне** репо, без **`webmaster-pipeline-dashboard/requirements.txt`** и без **«More than one requirements file»**; **Main file path** = `webmaster-pipeline-dashboard/app.py`.
+- [ ] В **корне** репо есть **`runtime.txt`** (`python-3.12.8`) рядом с **`requirements.txt`**.
+- [ ] В логах зависимости ставятся из **`.../requirements.txt` в корне** репо, без **`webmaster-pipeline-dashboard/requirements.txt`** и без **«More than one requirement file»**; **Main file path** = `webmaster-pipeline-dashboard/app.py`.
 - [ ] Таблицы Google расшарены на `client_email` из JSON.
 - [ ] В облаке задан `GOOGLE_SERVICE_ACCOUNT_JSON` (или эквивалент через env в Docker).
 - [ ] Книга «Возможности оплаты» (`17MoDWn…`) открыта для SA, если нужна вкладка «Варианты оплаты».

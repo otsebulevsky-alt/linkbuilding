@@ -1,5 +1,6 @@
 # Streamlit Community Cloud: exactly ONE requirements.txt at repo root (no second file under webmaster-pipeline-dashboard/).
 # Pin stack for Linux + Python 3.12. uv can otherwise resolve a too-new pyarrow/protobuf combo → segfault when running `streamlit` right after "Processed dependencies!".
+# Also keep runtime.txt in THIS SAME ROOT (not only under webmaster-pipeline-dashboard/) so Cloud/uv picks python-3.12.x — see DEPLOY.md.
 streamlit==1.36.0
 numpy==1.26.4
 pandas==2.1.4
