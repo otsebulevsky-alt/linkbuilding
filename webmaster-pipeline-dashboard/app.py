@@ -27,6 +27,7 @@ from lib.config import _secrets_get, _secrets_get_int, load_config, load_service
 from lib.mail_imap import fetch_unread_summaries
 from lib.mail_smtp import send_smtp_html
 from lib.article_publish_batch import run_article_publish_batch
+from lib.publication_check_batch import run_publication_check_batch
 from lib.trade_bargain import run_trade_bargain_round
 from lib.webmaster_inbox_sync import sync_unseen_webmasters_to_inbox_sheet
 from lib.sheets_service import (
@@ -45,7 +46,7 @@ from lib.sheets_service import (
 )
 
 # Меняйте при каждом релизе UI — в подписи под заголовком видно, что Cloud подтянул новый код.
-PANEL_UI_BUILD = "mail-ui-2026-04-05c"
+PANEL_UI_BUILD = "panel-2026-03-30-logic-sync"
 
 st.set_page_config(
     page_title="Linkbuilding — панель вебмастеров",
@@ -419,11 +420,13 @@ def main():
         st.session_state.trade_bargain_report = None
     if "article_publish_report" not in st.session_state:
         st.session_state.article_publish_report = None
+    if "publication_check_report" not in st.session_state:
+        st.session_state.publication_check_report = None
 
     qa1, qa2, qa3, qa4 = st.columns(4, gap="small")
     with qa1:
         if st.button("Прочитать почту", key="qa_mail", use_container_width=True, type="primary"):
-            gu, gp = _effective_gmail_imap_credentials(_secrets())
+            gu, gp = _effective_gmail_imap_credentials(_secrets_obj)
             if not gu or not gp:
                 st.session_state.imap_sync_report = {
                     "emails_seen": 0,
@@ -484,18 +487,45 @@ def main():
     with qa2:
         if st.button("торг", key="qa_trade", use_container_width=True, type="primary"):
             sm_host, sm_port, sm_user, sm_pass = _effective_gmail_smtp_settings(_secrets_obj)
-            st.session_state.trade_bargain_report = run_trade_bargain_round(
-                sheets_service=svc,
-                cfg=cfg,
-                smtp_host=sm_host,
-                smtp_port=sm_port,
-                smtp_user=sm_user,
-                smtp_password=sm_pass,
-            )
+            im_u, im_p = _effective_gmail_imap_credentials(_secrets_obj)
+            if not im_u or not im_p:
+                st.session_state.trade_bargain_report = {
+                    "errors": [
+                        "Нет доступа к **IMAP**: без него нельзя найти тред для ответа. Задайте в Secrets "
+                        "**GMAIL_IMAP_USER** / **GMAIL_IMAP_APP_PASSWORD** или **GMAIL_SMTP_*** (как для "
+                        "**«Прочитать почту»**). После сохранения — **Reboot app**."
+                    ],
+                    "today": "",
+                    "needles": [],
+                    "rows_matched": 0,
+                    "domains_considered": 0,
+                    "sent": 0,
+                    "skipped": [],
+                    "smtp_errors": [],
+                }
+            else:
+                st.session_state.trade_bargain_report = run_trade_bargain_round(
+                    sheets_service=svc,
+                    cfg=cfg,
+                    smtp_host=sm_host,
+                    smtp_port=sm_port,
+                    smtp_user=sm_user,
+                    smtp_password=sm_pass,
+                    imap_host="imap.gmail.com",
+                    imap_user=im_u,
+                    imap_password=im_p,
+                    imap_mailbox=cfg.imap_mailbox,
+                    imap_timeout_sec=cfg.imap_sync_timeout_sec,
+                )
             tr = st.session_state.trade_bargain_report
             if tr.get("errors") and tr.get("sent", 0) == 0:
                 try:
                     st.toast("Торг: ошибка или нет строк (см. отчёт)", icon="⚠️")
+                except Exception:
+                    pass
+            elif tr.get("sent", 0) == 0 and int(tr.get("rows_matched", 0) or 0) > 0:
+                try:
+                    st.toast("Торг: ни одного письма не отправлено (см. пропуски в отчёте)", icon="⚠️")
                 except Exception:
                     pass
             else:
@@ -503,18 +533,44 @@ def main():
     with qa3:
         if st.button("отправить статьи", key="qa_send", use_container_width=True, type="primary"):
             sm_host, sm_port, sm_user, sm_pass = _effective_gmail_smtp_settings(_secrets_obj)
-            st.session_state.article_publish_report = run_article_publish_batch(
-                sheets_service=svc,
-                cfg=cfg,
-                smtp_host=sm_host,
-                smtp_port=sm_port,
-                smtp_user=sm_user,
-                smtp_password=sm_pass,
-            )
+            im_u, im_p = _effective_gmail_imap_credentials(_secrets_obj)
+            if not im_u or not im_p:
+                st.session_state.article_publish_report = {
+                    "errors": [
+                        "Нет доступа к **IMAP**: без него нельзя найти тред для ответа. Задайте в Secrets "
+                        "**GMAIL_IMAP_USER** и **GMAIL_IMAP_APP_PASSWORD** (или **GMAIL_SMTP_*** с тем же "
+                        "логином и паролем приложения — как для кнопки **«Прочитать почту»**). После сохранения — **Reboot app**."
+                    ],
+                    "wait_rows_total": 0,
+                    "queued": 0,
+                    "sent": 0,
+                    "skipped": [],
+                    "smtp_errors": [],
+                    "capped": False,
+                }
+            else:
+                st.session_state.article_publish_report = run_article_publish_batch(
+                    sheets_service=svc,
+                    cfg=cfg,
+                    smtp_host=sm_host,
+                    smtp_port=sm_port,
+                    smtp_user=sm_user,
+                    smtp_password=sm_pass,
+                    imap_host="imap.gmail.com",
+                    imap_user=im_u,
+                    imap_password=im_p,
+                    imap_mailbox=cfg.imap_mailbox,
+                    imap_timeout_sec=cfg.imap_sync_timeout_sec,
+                )
             ar = st.session_state.article_publish_report
             if ar.get("errors") and ar.get("sent", 0) == 0:
                 try:
                     st.toast("Статьи: ошибка или нечего слать (см. отчёт)", icon="⚠️")
+                except Exception:
+                    pass
+            elif ar.get("sent", 0) == 0 and int(ar.get("queued", 0) or 0) > 0:
+                try:
+                    st.toast("Статьи: ни одного письма не отправлено (см. пропуски в отчёте)", icon="⚠️")
                 except Exception:
                     pass
             else:
@@ -522,7 +578,23 @@ def main():
                 _quick_notify(f"Статьи: отправлено {ar.get('sent', 0)}{cap} · пропусков: {len(ar.get('skipped') or [])}")
     with qa4:
         if st.button("проверка публикаций", key="qa_check", use_container_width=True, type="primary"):
-            _quick_notify("Проверка публикаций — заготовка; позже: сверка статусов с реестром.")
+            st.session_state.publication_check_report = run_publication_check_batch(
+                sheets_service=svc,
+                cfg=cfg,
+            )
+            pc = st.session_state.publication_check_report
+            if pc.get("errors") and int(pc.get("checked", 0) or 0) == 0:
+                try:
+                    st.toast("Проверка публикаций: ошибка или нечего проверять (см. отчёт)", icon="⚠️")
+                except Exception:
+                    pass
+            else:
+                ov = sum(1 for r in (pc.get("results") or []) if r.get("overall_ok"))
+                _quick_notify(
+                    f"Проверка: строк OK {ov}/{pc.get('checked', 0)} · HTTP OK {pc.get('http_ok_count', 0)} · "
+                    f"I+J OK {pc.get('placement_pair_yes', 0)} · индекс «да» {pc.get('index_yes', 0)} · "
+                    f"пропусков {len(pc.get('skipped') or [])}"
+                )
     st.divider()
 
     if st.session_state.imap_sync_report is not None:
@@ -586,14 +658,17 @@ def main():
 
     if st.session_state.trade_bargain_report is not None:
         tr = st.session_state.trade_bargain_report
-        with st.expander("💬 Торг (калькулятор → «Сбор с ответов» → SMTP)", expanded=True):
+        with st.expander("💬 Торг (калькулятор → «Сбор с ответов» → IMAP-тред → SMTP)", expanded=True):
             st.caption(
                 "Строки **калькулятора** (вкладка `GID_CALCULATOR_TAB_1`), где в колонке **даты** стоит **сегодня** "
                 f"({tr.get('today', '…')} по **{cfg.trade_timezone}**), а в колонке **ответственного** есть одна из подстрок: "
                 f"{', '.join(repr(x) for x in (tr.get('needles') or [])[:12]) or '—'}. "
                 "Email вебмастера — **только** из таблицы **«Сбор с ответов»** (последняя по дате строка с тем же доменом). "
-                "Письмо: предложение снизить цену на долю из **TRADE_DISCOUNT_PERCENT** (по умолчанию 20 %). "
-                "Заголовок даты в калькуляторе при неоднозначности: **COL_TRADE_DATE** в Secrets; ответственный: **TRADE_RESPONSIBLE_NAME**."
+                "По **IMAP** ищется переписка с этим адресом и доменом; письмо уходит **ответом в тот же тред** "
+                "(тема **Re:** из найденного письма, In-Reply-To / References). "
+                "Без треда в ящике — пропуск **no_imap_thread**. "
+                "Текст: скидка **TRADE_DISCOUNT_PERCENT** (по умолчанию 20 %). "
+                "**COL_TRADE_DATE**, **TRADE_RESPONSIBLE_NAME** — в Secrets."
             )
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("Сегодня (фильтр)", tr.get("today", "—"))
@@ -614,7 +689,7 @@ def main():
 
     if st.session_state.article_publish_report is not None:
         ar = st.session_state.article_publish_report
-        with st.expander("📎 Отправить статьи (реестры → «Сбор с ответов» → SMTP)", expanded=True):
+        with st.expander("📎 Отправить статьи (реестры → «Сбор с ответов» → IMAP-тред → SMTP)", expanded=True):
             lim = cfg.article_publish_max_send
             lim_txt = "без лимита" if lim == 0 else str(lim)
             st.caption(
@@ -622,8 +697,9 @@ def main():
                 "в **Article/post** (у вас обычно колонка **H**) — ссылка на **Google Docs** или **Google Drive**, "
                 "домен для почты — **Website Donor** (колонка **A**). "
                 "Адрес берётся из **«Сбор с ответов»** по домену (сначала **«Прочитать почту»**). "
-                "Письмо с текстом вроде «пожалуйста, разместите нашу статью» + ссылка на док — это **новое** письмо на найденный email, "
-                "**не** вставка в существующий тред Gmail (тред — отдельная доработка). "
+                "По **IMAP** ищется последнее письмо в переписке с этим адресом, где в теме/теле фигурирует домен; "
+                "отправка идёт **ответом в тот же тред** (тема **Re:** …, заголовки In-Reply-To / References). "
+                "Если тред в ящике не найден — строка в пропусках с причиной **no_imap_thread**, письмо не шлётся. "
                 f"За клик не более **{lim_txt}** отправок (**ARTICLE_PUBLISH_MAX_SEND**; **0** = без лимита). "
                 "Ручная правка — вкладка **«Жду публикации → отправка»**."
             )
@@ -644,6 +720,65 @@ def main():
                 st.dataframe(pd.DataFrame(skipped), use_container_width=True, height=min(260, 60 + 24 * len(skipped)))
             if st.button("Скрыть отчёт статьи", key="article_publish_clear"):
                 st.session_state.article_publish_report = None
+                st.rerun()
+
+    if st.session_state.publication_check_report is not None:
+        pc = st.session_state.publication_check_report
+        with st.expander("✅ Проверка публикаций (HTTP + EEAT + Anchor/Outgoing + индекс)", expanded=True):
+            to = cfg.publication_check_timeout_sec
+            mx = cfg.publication_check_max_rows
+            lim_txt = "без лимита" if mx == 0 else str(mx)
+            stst = ", ".join(repr(s) for s in (cfg.publication_check_statuses or [])[:8])
+            ci_note = (
+                "регистр букв анкора игнорируется (**PUBLICATION_CHECK_ANCHOR_CASE_INSENSITIVE**)."
+                if cfg.publication_check_anchor_case_insensitive
+                else "анкор сравнивается **с учётом регистра** (можно включить без учёта регистра в Secrets)."
+            )
+            st.caption(
+                f"Статусы строк: **{stst}** (**PUBLICATION_CHECK_STATUSES**; по умолчанию только **Готово**). "
+                "В **Article/post** (обычно колонка **H**) — URL опубликованной статьи; **GET** HTML (**2xx–3xx**, лимит тела **PUBLICATION_CHECK_MAX_BODY_BYTES**). "
+                f"На странице ищется одна и та же ссылка **<a>**: href из **{cfg.col_outgoing_link}** (колонка **J**) и видимый текст = **{cfg.col_anchor}** (колонка **I**); {ci_note} "
+                "**EEAT** — как **weekly-outreach-sync.gs**: **EEAT_AUTHOR_MARKERS**, колонки **Автор со ссылкой** / **Автор без ссылки**; при URL в «Автор со ссылкой» — href на странице. "
+                "**Индекс** — опционально **Google CSE** (**GOOGLE_CSE_API_KEY**, **GOOGLE_CSE_CX**). "
+                f"Таймаут **{to}** с, за клик до **{lim_txt}** URL (**0** = без лимита). "
+                "Устаревшее имя **COL_PLACED_TARGET_URL** в Secrets подставляется, если **COL_OUTGOING_LINK** пусто."
+            )
+            if pc.get("options_note"):
+                st.info(pc["options_note"])
+            c1, c2, c3, c4, c5, c6, c7, c8 = st.columns(8)
+            c1.metric("Строк по статусам", pc.get("wait_rows_total", 0))
+            c2.metric("В очереди", pc.get("queued", 0))
+            c3.metric("Проверено URL", pc.get("checked", 0))
+            c4.metric("HTTP OK", pc.get("http_ok_count", 0))
+            c5.metric("I+J на странице", pc.get("placement_pair_yes", 0))
+            c6.metric("Индекс «да»", pc.get("index_yes", 0))
+            c7.metric("Индекс «нет»", pc.get("index_no", 0))
+            overall_n = sum(1 for r in (pc.get("results") or []) if r.get("overall_ok"))
+            c8.metric("Все проверки OK", overall_n)
+            if pc.get("capped"):
+                st.warning(
+                    f"Достигнут лимит проверок за запуск (**{cfg.publication_check_max_rows}**). "
+                    "Увеличьте **PUBLICATION_CHECK_MAX_ROWS** или поставьте **0**."
+                )
+            for err in pc.get("errors") or []:
+                st.error(err)
+            results = pc.get("results") or []
+            if results:
+                st.subheader("Результаты")
+                bad = [r for r in results if not r.get("overall_ok")]
+                if bad:
+                    st.warning("Строки, где не прошла хотя бы одна из включённых проверок:")
+                    st.dataframe(pd.DataFrame(bad), use_container_width=True, height=min(320, 60 + 22 * len(bad)))
+                good = [r for r in results if r.get("overall_ok")]
+                if good:
+                    st.success(f"Все включённые проверки OK ({len(good)}):")
+                    st.dataframe(pd.DataFrame(good), use_container_width=True, height=min(240, 60 + 22 * len(good)))
+            skipped = pc.get("skipped") or []
+            if skipped:
+                st.caption("Пропуски")
+                st.dataframe(pd.DataFrame(skipped), use_container_width=True, height=min(240, 60 + 22 * len(skipped)))
+            if st.button("Скрыть отчёт проверки", key="publication_check_clear"):
+                st.session_state.publication_check_report = None
                 st.rerun()
 
     tab_stats, tab_reg, tab_wait, tab_inbox, tab_calc, tab_pay = st.tabs(
@@ -706,7 +841,8 @@ def main():
         st.subheader("Строки со статусом «Жду публикации»")
         st.markdown(
             "Выберите реестр, укажите **email вебмастера** и при необходимости отредактируйте текст. "
-            "Отправка — через SMTP (пароль приложения Gmail), если заданы секреты `GMAIL_SMTP_*`."
+            "Отправка с этой вкладки — **новое** письмо через SMTP (`GMAIL_SMTP_*`). "
+            "Кнопка **«отправить статьи»** вверху шлёт **ответ в тот же тред** (IMAP ищет переписку, затем SMTP с In-Reply-To)."
         )
         reg_choice = st.radio("Реестр", ("TelecomAsia", "Реестр 2"), horizontal=True, key="wait_reg")
         if reg_choice == "TelecomAsia":

@@ -88,6 +88,22 @@ class AppConfig:
     # «Отправить статьи»: максимум писем за одно нажатие (0 = без лимита)
     article_publish_max_send: int
 
+    # «Проверка публикаций»: HTTP + EEAT на странице + целевая ссылка + опционально Google CSE (индекс)
+    publication_check_timeout_sec: int
+    publication_check_max_rows: int
+    publication_check_max_body_bytes: int
+    publication_check_statuses: list[str]
+    eeat_author_markers: list[str]
+    col_author_with_link: str
+    col_author_without_link: str
+    # Колонка J — целевой URL; COL_PLACED_TARGET_URL в secrets остаётся алиасом, если COL_OUTGOING_LINK пусто
+    col_outgoing_link: str
+    # Колонка I — видимый текст ссылки (должен совпасть с тем же <a>, что и outgoing)
+    col_anchor: str
+    publication_check_anchor_case_insensitive: bool
+    google_cse_api_key: str
+    google_cse_cx: str
+
 
 def _secrets_lookup_raw(secrets: Any, key: str) -> Any:
     """Streamlit versions differ: prefer __getitem__, then .get(), then attribute."""
@@ -261,6 +277,61 @@ def load_config(secrets: Any | None = None) -> AppConfig:
                 _env_int("ARTICLE_PUBLISH_MAX_SEND", 50),
             ),
         ),
+        publication_check_timeout_sec=max(
+            5,
+            min(
+                120,
+                _secrets_get_int(
+                    secrets,
+                    "PUBLICATION_CHECK_TIMEOUT_SEC",
+                    _env_int("PUBLICATION_CHECK_TIMEOUT_SEC", 25),
+                ),
+            ),
+        ),
+        publication_check_max_rows=max(
+            0,
+            _secrets_get_int(
+                secrets,
+                "PUBLICATION_CHECK_MAX_ROWS",
+                _env_int("PUBLICATION_CHECK_MAX_ROWS", 150),
+            ),
+        ),
+        publication_check_max_body_bytes=max(
+            50_000,
+            min(
+                5_000_000,
+                _secrets_get_int(
+                    secrets,
+                    "PUBLICATION_CHECK_MAX_BODY_BYTES",
+                    _env_int("PUBLICATION_CHECK_MAX_BODY_BYTES", 1_500_000),
+                ),
+            ),
+        ),
+        publication_check_statuses=_parse_list_csv(
+            secrets,
+            "PUBLICATION_CHECK_STATUSES",
+            ["Готово"],
+        ),
+        eeat_author_markers=_parse_list_csv(
+            secrets,
+            "EEAT_AUTHOR_MARKERS",
+            ["алиса", "alisa", "metaratings", "авторы metaratings"],
+        ),
+        col_author_with_link=_secrets_get(secrets, "COL_AUTHOR_WITH_LINK", "Автор со ссылкой"),
+        col_author_without_link=_secrets_get(secrets, "COL_AUTHOR_WITHOUT_LINK", "Автор без ссылки"),
+        col_outgoing_link=(
+            _secrets_get(secrets, "COL_OUTGOING_LINK", "")
+            or _secrets_get(secrets, "COL_PLACED_TARGET_URL", "")
+            or "Outgoing link"
+        ),
+        col_anchor=_secrets_get(secrets, "COL_ANCHOR", "Anchor"),
+        publication_check_anchor_case_insensitive=_secrets_get_bool(
+            secrets,
+            "PUBLICATION_CHECK_ANCHOR_CASE_INSENSITIVE",
+            _env_bool("PUBLICATION_CHECK_ANCHOR_CASE_INSENSITIVE", False),
+        ),
+        google_cse_api_key=_secrets_get(secrets, "GOOGLE_CSE_API_KEY", _env("GOOGLE_CSE_API_KEY", "")),
+        google_cse_cx=_secrets_get(secrets, "GOOGLE_CSE_CX", _env("GOOGLE_CSE_CX", "")),
     )
 
 

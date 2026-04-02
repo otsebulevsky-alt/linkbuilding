@@ -1,4 +1,4 @@
-"""Кнопка «отправить статьи»: строки «Жду публикации» в реестрах → почта из «Сбор с ответов» → SMTP."""
+"""Кнопка «отправить статьи»: реестры → «Сбор с ответов» → IMAP (тред) → SMTP-ответ в переписку."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ from typing import Any
 
 from lib.config import AppConfig
 from lib.mail_smtp import send_smtp_html
+from lib.mail_thread_lookup import find_reply_context_for_peer
 from lib.sheets_service import (
     a1_all_columns,
     filter_by_linkbuilder,
@@ -68,10 +69,16 @@ def run_article_publish_batch(
     smtp_port: int,
     smtp_user: str,
     smtp_password: str,
+    imap_host: str,
+    imap_user: str,
+    imap_password: str,
+    imap_mailbox: str,
+    imap_timeout_sec: int,
 ) -> dict[str, Any]:
     """
     Строки: статус «Жду публикации» (колонка Status), в колонке Article/post — ссылка на **Google Docs/Drive**,
-    домен из Website Donor → почта из «Сбор с ответов» → SMTP (новое письмо, не ответ в тред Gmail).
+    домен из Website Donor → почта из «Сбор с ответов» → IMAP (поиск треда с вебмастером и доменом) → SMTP
+    **ответ в тот же тред** (In-Reply-To / References). Без найденного треда письмо не отправляется.
     """
     report: dict[str, Any] = {
         "errors": [],
@@ -86,6 +93,13 @@ def run_article_publish_batch(
     if not (smtp_user and smtp_password):
         report["errors"].append(
             "SMTP не настроен: нужны **GMAIL_SMTP_*** или **GMAIL_IMAP_*** (пароль приложения)."
+        )
+        return report
+
+    if not (imap_user and imap_password):
+        report["errors"].append(
+            "IMAP не настроен: для ответа в тред нужны **GMAIL_IMAP_*** (или те же **GMAIL_SMTP_***), "
+            "что и для «Прочитать почту»."
         )
         return report
 
@@ -166,7 +180,6 @@ def run_article_publish_batch(
 
     max_send = cfg.article_publish_max_send
     sent = 0
-    subj_base = "Article for publication / Статья для публикации"
 
     for t in tasks:
         if t.get("reason") == "no_domain":
@@ -192,8 +205,22 @@ def run_article_publish_batch(
         if not to_addr:
             report["skipped"].append({"registry": t["registry"], "domain": dom, "reason": "no_email_in_inbox_log"})
             continue
+        ctx = find_reply_context_for_peer(
+            imap_host=imap_host,
+            imap_user=imap_user,
+            imap_password=imap_password,
+            imap_mailbox=imap_mailbox,
+            peer_email=to_addr,
+            domain=dom,
+            timeout_sec=max(60, int(imap_timeout_sec)),
+        )
+        if not ctx:
+            report["skipped"].append(
+                {"registry": t["registry"], "domain": dom, "reason": "no_imap_thread"}
+            )
+            continue
         body = build_article_publish_email_html(art, t.get("cost") or "")
-        subj = f"{subj_base} — {dom}"[:998]
+        subj = ((ctx.get("subject") or "").strip() or "Re: ")[:998]
         try:
             send_smtp_html(
                 host=smtp_host,
@@ -204,6 +231,8 @@ def run_article_publish_batch(
                 subject=subj,
                 html_body=body,
                 use_tls=True,
+                in_reply_to=ctx.get("message_id"),
+                references=ctx.get("references"),
             )
             sent += 1
         except Exception as e:

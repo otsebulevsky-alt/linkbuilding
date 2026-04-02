@@ -18,11 +18,18 @@ def send_smtp_html(
     html_body: str,
     from_addr: str | None = None,
     use_tls: bool = True,
+    in_reply_to: str | None = None,
+    references: str | None = None,
 ) -> None:
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
+    subj = (subject or "").strip()
+    msg["Subject"] = subj if subj else "Re: "
     msg["From"] = from_addr or user
     msg["To"] = to_addr
+    if in_reply_to and in_reply_to.strip():
+        msg["In-Reply-To"] = in_reply_to.strip()
+    if references and references.strip():
+        msg["References"] = references.strip()
     msg.attach(MIMEText(html_body, "html", "utf-8"))
 
     with smtplib.SMTP(host, port, timeout=60) as server:

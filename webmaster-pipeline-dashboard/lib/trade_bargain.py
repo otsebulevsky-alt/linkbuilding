@@ -1,4 +1,4 @@
-"""Кнопка «торг»: строки калькулятора за сегодня (ДД.ММ.ГГГГ) + ответственный → email из «Сбор с ответов» → SMTP −20%."""
+"""Кнопка «торг»: калькулятор за сегодня → email из «Сбор с ответов» → IMAP (тред) → SMTP-ответ со скидкой."""
 
 from __future__ import annotations
 
@@ -233,6 +233,11 @@ def run_trade_bargain_round(
     smtp_port: int,
     smtp_user: str,
     smtp_password: str,
+    imap_host: str,
+    imap_user: str,
+    imap_password: str,
+    imap_mailbox: str,
+    imap_timeout_sec: int,
 ) -> dict[str, Any]:
     report: dict[str, Any] = {
         "errors": [],
@@ -261,6 +266,16 @@ def run_trade_bargain_round(
             "SMTP не настроен: нужны **GMAIL_SMTP_*** или **GMAIL_IMAP_*** (пароль приложения)."
         )
         return report
+
+    if not (imap_user and imap_password):
+        report["errors"].append(
+            "IMAP не настроен: для ответа в тред нужны **GMAIL_IMAP_*** (или **GMAIL_SMTP_*** с тем же паролем приложения), "
+            "как для **«Прочитать почту»** и **«отправить статьи»**."
+        )
+        return report
+
+    # Ленивый импорт: иначе цикл trade_bargain ↔ mail_thread_lookup (там normalize_domain_cell).
+    from lib.mail_thread_lookup import find_reply_context_for_peer
 
     title_calc = get_sheet_title_by_gid(
         sheets_service, cfg.spreadsheet_calculator_id, cfg.gid_calculator_tab_primary
@@ -345,12 +360,24 @@ def run_trade_bargain_round(
         if not to_addr:
             report["skipped"].append({"domain": dom, "reason": "no_email_in_inbox_log"})
             continue
+        ctx = find_reply_context_for_peer(
+            imap_host=imap_host,
+            imap_user=imap_user,
+            imap_password=imap_password,
+            imap_mailbox=imap_mailbox,
+            peer_email=to_addr,
+            domain=dom,
+            timeout_sec=max(60, int(imap_timeout_sec)),
+        )
+        if not ctx:
+            report["skipped"].append({"domain": dom, "reason": "no_imap_thread"})
+            continue
         new_price = round(price * (1.0 - discount), 2)
         pct = int(round(discount * 100))
         esc_dom = html_module.escape(dom)
         esc_price = html_module.escape(str(price))
         esc_new = html_module.escape(str(new_price))
-        subj = f"Re: {dom} — pricing / согласование цены"
+        subj = ((ctx.get("subject") or "").strip() or "Re: ")[:998]
         body = (
             f"<p>Hello,</p>"
             f"<p>Thank you. We would really love to place our content with you "
@@ -375,9 +402,11 @@ def run_trade_bargain_round(
                 user=smtp_user,
                 password=smtp_password,
                 to_addr=to_addr,
-                subject=subj[:998],
+                subject=subj,
                 html_body=body,
                 use_tls=True,
+                in_reply_to=ctx.get("message_id"),
+                references=ctx.get("references"),
             )
             report["sent"] += 1
         except Exception as e:

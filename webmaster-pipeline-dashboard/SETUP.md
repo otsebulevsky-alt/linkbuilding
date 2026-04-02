@@ -54,7 +54,7 @@
    - В адресной строке браузера найдите фрагмент **`#gid=ЧИСЛО`** — это идентификатор листа.  
    По умолчанию в коде заданы значения из [implementation-notes](../../../../shared-docs/events/2026-03-30_ai-hackaton/results/hack-382/implementation-notes.md). Если ваши вкладки другие — задайте в Secrets: `GID_TELECOM_REGISTRY`, `GID_REGISTRY_2`, `GID_CALCULATOR_TAB_1`, при необходимости `GID_CALCULATOR_TAB_2`.
 
-3. Убедитесь, что **первая строка** листа — заголовки (например `Linkbuilder`, `Status`, `Article/post`). Если названия другие — поправьте в `secrets.toml` ключи `COL_*` (см. [secrets.toml.example](secrets.toml.example)).
+3. Убедитесь, что **первая строка** листа — заголовки (например `Linkbuilder`, `Status`, `Article/post`). Если названия другие — поправьте в `secrets.toml` ключи `COL_*` (см. [secrets.toml.example](secrets.toml.example)). Для кнопки **«проверка публикаций»** нужны ещё **`Anchor`** и **`Outgoing link`** (или `COL_ANCHOR` / `COL_OUTGOING_LINK`).
 
 ---
 
