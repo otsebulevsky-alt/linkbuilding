@@ -85,6 +85,9 @@ class AppConfig:
     # Доля скидки (0.2 = минус 20 %)
     trade_discount_percent: float
 
+    # «Отправить статьи»: максимум писем за одно нажатие (0 = без лимита)
+    article_publish_max_send: int
+
 
 def _secrets_lookup_raw(secrets: Any, key: str) -> Any:
     """Streamlit versions differ: prefer __getitem__, then .get(), then attribute."""
@@ -248,6 +251,14 @@ def load_config(secrets: Any | None = None) -> AppConfig:
                     "TRADE_DISCOUNT_PERCENT",
                     _env_float("TRADE_DISCOUNT_PERCENT", 0.2),
                 ),
+            ),
+        ),
+        article_publish_max_send=max(
+            0,
+            _secrets_get_int(
+                secrets,
+                "ARTICLE_PUBLISH_MAX_SEND",
+                _env_int("ARTICLE_PUBLISH_MAX_SEND", 50),
             ),
         ),
     )

@@ -42,6 +42,7 @@ def main() -> None:
     print('LINKBUILDER_FILTER = "Олег"')
     print('LINKBUILDER_ALIASES = "Oleg,oleg"')
     print('TRADE_RESPONSIBLE_NAME = "Oleg Tsebulevskiy"')
+    print('ARTICLE_PUBLISH_MAX_SEND = "50"')
     print()
     print("# --- Mail (replace APP_PASSWORD with your Google App Password, 16 chars) ---")
     print('GMAIL_SMTP_USER = "o.tsebulevsky@rantsports.com"')

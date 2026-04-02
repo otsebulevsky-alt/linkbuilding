@@ -26,6 +26,7 @@ from googleapiclient.errors import HttpError
 from lib.config import _secrets_get, _secrets_get_int, load_config, load_service_account_info, use_google_adc
 from lib.mail_imap import fetch_unread_summaries
 from lib.mail_smtp import send_smtp_html
+from lib.article_publish_batch import run_article_publish_batch
 from lib.trade_bargain import run_trade_bargain_round
 from lib.webmaster_inbox_sync import sync_unseen_webmasters_to_inbox_sheet
 from lib.sheets_service import (
@@ -44,7 +45,7 @@ from lib.sheets_service import (
 )
 
 # Меняйте при каждом релизе UI — в подписи под заголовком видно, что Cloud подтянул новый код.
-PANEL_UI_BUILD = "mail-ui-2026-04-05a"
+PANEL_UI_BUILD = "mail-ui-2026-04-05b"
 
 st.set_page_config(
     page_title="Linkbuilding — панель вебмастеров",
@@ -416,6 +417,8 @@ def main():
         st.session_state.imap_sync_report = None
     if "trade_bargain_report" not in st.session_state:
         st.session_state.trade_bargain_report = None
+    if "article_publish_report" not in st.session_state:
+        st.session_state.article_publish_report = None
 
     qa1, qa2, qa3, qa4 = st.columns(4, gap="small")
     with qa1:
@@ -499,7 +502,24 @@ def main():
                 _quick_notify(f"Торг: отправлено писем {tr.get('sent', 0)} · строк за сегодня: {tr.get('rows_matched', 0)}")
     with qa3:
         if st.button("отправить статьи", key="qa_send", use_container_width=True, type="primary"):
-            _quick_notify("Вкладка «Жду публикации → отправка» — выбор строки и отправка письма.")
+            sm_host, sm_port, sm_user, sm_pass = _effective_gmail_smtp_settings(_secrets_obj)
+            st.session_state.article_publish_report = run_article_publish_batch(
+                sheets_service=svc,
+                cfg=cfg,
+                smtp_host=sm_host,
+                smtp_port=sm_port,
+                smtp_user=sm_user,
+                smtp_password=sm_pass,
+            )
+            ar = st.session_state.article_publish_report
+            if ar.get("errors") and ar.get("sent", 0) == 0:
+                try:
+                    st.toast("Статьи: ошибка или нечего слать (см. отчёт)", icon="⚠️")
+                except Exception:
+                    pass
+            else:
+                cap = " (лимит)" if ar.get("capped") else ""
+                _quick_notify(f"Статьи: отправлено {ar.get('sent', 0)}{cap} · пропусков: {len(ar.get('skipped') or [])}")
     with qa4:
         if st.button("проверка публикаций", key="qa_check", use_container_width=True, type="primary"):
             _quick_notify("Проверка публикаций — заготовка; позже: сверка статусов с реестром.")
@@ -590,6 +610,37 @@ def main():
                 st.dataframe(pd.DataFrame(skipped), use_container_width=True, height=min(200, 60 + 28 * len(skipped)))
             if st.button("Скрыть отчёт торг", key="trade_report_clear"):
                 st.session_state.trade_bargain_report = None
+                st.rerun()
+
+    if st.session_state.article_publish_report is not None:
+        ar = st.session_state.article_publish_report
+        with st.expander("📎 Отправить статьи (реестры → «Сбор с ответов» → SMTP)", expanded=True):
+            lim = cfg.article_publish_max_send
+            lim_txt = "без лимита" if lim == 0 else str(lim)
+            st.caption(
+                f"Строки **«{cfg.status_wait_publish}»** в **обоих** реестрах (ваш linkbuilder). "
+                "Почта вебмастера — из **«Сбор с ответов»** по домену из **Website Donor** (как у «торг»). "
+                "Нужны **ссылка на статью** в колонке Article/post; иначе строка пропускается. "
+                f"За одно нажатие не более **{lim_txt}** успешных отправок (**ARTICLE_PUBLISH_MAX_SEND**; **0** = без лимита). "
+                "Точечная правка письма — вкладка **«Жду публикации → отправка»**."
+            )
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Строк «Жду публикации»", ar.get("wait_rows_total", 0))
+            c2.metric("В очереди разбора", ar.get("queued", 0))
+            c3.metric("Отправлено SMTP", ar.get("sent", 0))
+            c4.metric("Пропусков", len(ar.get("skipped") or []))
+            if ar.get("capped"):
+                st.warning(f"Достигнут лимит отправок за запуск (**{cfg.article_publish_max_send}**). Остальные строки не обработаны.")
+            for err in ar.get("errors") or []:
+                st.error(err)
+            for se in ar.get("smtp_errors") or []:
+                st.warning(se)
+            skipped = ar.get("skipped") or []
+            if skipped:
+                st.warning("Пропуски:")
+                st.dataframe(pd.DataFrame(skipped), use_container_width=True, height=min(260, 60 + 24 * len(skipped)))
+            if st.button("Скрыть отчёт статьи", key="article_publish_clear"):
+                st.session_state.article_publish_report = None
                 st.rerun()
 
     tab_stats, tab_reg, tab_wait, tab_inbox, tab_calc, tab_pay = st.tabs(
