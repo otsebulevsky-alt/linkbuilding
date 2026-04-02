@@ -21,6 +21,14 @@ from lib.sheets_service import (
 from lib.trade_bargain import find_webmaster_email_in_inbox_log, normalize_domain_cell
 
 
+def is_google_docs_or_drive_url(raw: str) -> bool:
+    """Ссылка на черновик в Google Docs / Drive (колонка Article/post в реестре)."""
+    s = (raw or "").strip().lower()
+    if not s.startswith("http"):
+        return False
+    return "docs.google.com" in s or "drive.google.com" in s
+
+
 def build_article_publish_email_html(article_raw: str, cost_raw: str) -> str:
     """Двуязычное тело, как на вкладке «Жду публикации» (EN + RU)."""
     art = (article_raw or "").strip()
@@ -41,12 +49,12 @@ def build_article_publish_email_html(article_raw: str, cost_raw: str) -> str:
         fee_ru = "по согласованию."
     return (
         f"<p>Hello,</p>"
-        f"<p>Please publish our article: {art_html_en}</p>"
+        f"<p>Could you please publish our article? The text is in this Google Doc: {art_html_en}</p>"
         f"<p>Placement fee (gambling): {fee_en}</p>"
         f"<p>Best regards</p>"
         f"<p>—</p>"
         f"<p>Здравствуйте!</p>"
-        f"<p>Просьба разместить нашу статью: {art_html_ru}</p>"
+        f"<p>Пожалуйста, разместите нашу статью. Документ в Google Docs: {art_html_ru}</p>"
         f"<p>Сумма за размещение (гемблинг): {fee_ru}</p>"
         f"<p>С уважением</p>"
     )
@@ -62,8 +70,8 @@ def run_article_publish_batch(
     smtp_password: str,
 ) -> dict[str, Any]:
     """
-    Все строки со статусом «Жду публикации» (оба реестра, фильтр linkbuilder):
-    домен → email из «Сбор с ответов» → одно письмо с шаблоном статьи/цены.
+    Строки: статус «Жду публикации» (колонка Status), в колонке Article/post — ссылка на **Google Docs/Drive**,
+    домен из Website Donor → почта из «Сбор с ответов» → SMTP (новое письмо, не ответ в тред Gmail).
     """
     report: dict[str, Any] = {
         "errors": [],
@@ -174,6 +182,11 @@ def run_article_publish_batch(
         art = t.get("art") or ""
         if not art.strip():
             report["skipped"].append({"registry": t["registry"], "domain": dom, "reason": "no_article_link"})
+            continue
+        if not is_google_docs_or_drive_url(art):
+            report["skipped"].append(
+                {"registry": t["registry"], "domain": dom, "reason": "not_google_doc_url"}
+            )
             continue
         to_addr = find_webmaster_email_in_inbox_log(df_inbox, dom)
         if not to_addr:

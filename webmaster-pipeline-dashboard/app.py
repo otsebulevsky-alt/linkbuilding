@@ -45,7 +45,7 @@ from lib.sheets_service import (
 )
 
 # Меняйте при каждом релизе UI — в подписи под заголовком видно, что Cloud подтянул новый код.
-PANEL_UI_BUILD = "mail-ui-2026-04-05b"
+PANEL_UI_BUILD = "mail-ui-2026-04-05c"
 
 st.set_page_config(
     page_title="Linkbuilding — панель вебмастеров",
@@ -618,11 +618,14 @@ def main():
             lim = cfg.article_publish_max_send
             lim_txt = "без лимита" if lim == 0 else str(lim)
             st.caption(
-                f"Строки **«{cfg.status_wait_publish}»** в **обоих** реестрах (ваш linkbuilder). "
-                "Почта вебмастера — из **«Сбор с ответов»** по домену из **Website Donor** (как у «торг»). "
-                "Нужны **ссылка на статью** в колонке Article/post; иначе строка пропускается. "
-                f"За одно нажатие не более **{lim_txt}** успешных отправок (**ARTICLE_PUBLISH_MAX_SEND**; **0** = без лимита). "
-                "Точечная правка письма — вкладка **«Жду публикации → отправка»**."
+                f"Условия как в реестре **TelecomAsia**: колонка **Status** = **«{cfg.status_wait_publish}»**, "
+                "в **Article/post** (у вас обычно колонка **H**) — ссылка на **Google Docs** или **Google Drive**, "
+                "домен для почты — **Website Donor** (колонка **A**). "
+                "Адрес берётся из **«Сбор с ответов»** по домену (сначала **«Прочитать почту»**). "
+                "Письмо с текстом вроде «пожалуйста, разместите нашу статью» + ссылка на док — это **новое** письмо на найденный email, "
+                "**не** вставка в существующий тред Gmail (тред — отдельная доработка). "
+                f"За клик не более **{lim_txt}** отправок (**ARTICLE_PUBLISH_MAX_SEND**; **0** = без лимита). "
+                "Ручная правка — вкладка **«Жду публикации → отправка»**."
             )
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("Строк «Жду публикации»", ar.get("wait_rows_total", 0))
@@ -745,14 +748,16 @@ def main():
                 if lang == "RU":
                     default_body = (
                         f"<p>Здравствуйте!</p>"
-                        f"<p>Просьба разместить нашу статью: <a href=\"{html.escape(art)}\">{html.escape(art)}</a></p>"
+                        f"<p>Пожалуйста, разместите нашу статью. Документ в Google Docs: "
+                        f"<a href=\"{html.escape(art)}\">{html.escape(art)}</a></p>"
                         f"<p>Сумма за размещение (гемблинг): <b>{html.escape(cost)}</b> USD (уточните по калькулятору при необходимости).</p>"
                         f"<p>С уважением</p>"
                     )
                 else:
                     default_body = (
                         f"<p>Hello,</p>"
-                        f"<p>Please publish our article: <a href=\"{html.escape(art)}\">{html.escape(art)}</a></p>"
+                        f"<p>Could you please publish our article? The text is in this Google Doc: "
+                        f"<a href=\"{html.escape(art)}\">{html.escape(art)}</a></p>"
                         f"<p>Placement fee (gambling): <b>{html.escape(cost)}</b> USD (see internal calculator if needed).</p>"
                         f"<p>Best regards</p>"
                     )
