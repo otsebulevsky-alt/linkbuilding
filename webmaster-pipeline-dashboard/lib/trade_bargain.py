@@ -344,18 +344,25 @@ def run_trade_bargain_round(
             report["skipped"].append({"domain": dom, "reason": "no_email_in_inbox_log"})
             continue
         new_price = round(price * (1.0 - discount), 2)
-        subj = f"Price proposal / Предложение по цене — {dom}"
+        pct = int(round(discount * 100))
+        esc_dom = html_module.escape(dom)
+        esc_price = html_module.escape(str(price))
+        esc_new = html_module.escape(str(new_price))
+        subj = f"Re: {dom} — pricing / согласование цены"
         body = (
             f"<p>Hello,</p>"
-            f"<p>Regarding placement on <b>{html_module.escape(dom)}</b>: "
-            f"we would like to propose a <b>{int(discount * 100)}%</b> reduction "
-            f"from the discussed <b>{html_module.escape(str(price))}</b> USD — "
-            f"i.e. <b>{html_module.escape(str(new_price))}</b> USD.</p>"
+            f"<p>Thank you for your message regarding <b>{esc_dom}</b>. We appreciate your time and flexibility.</p>"
+            f"<p>Could we possibly agree on a <b>modest {pct}% discount</b> on the discussed rate? "
+            f"That would mean <b>{esc_new}</b> USD instead of <b>{esc_price}</b> USD. "
+            f"If this works for you, we would be glad to move forward.</p>"
+            f"<p>Kind regards</p>"
+            f"<p>—</p>"
             f"<p>Здравствуйте.</p>"
-            f"<p>По размещению на <b>{html_module.escape(dom)}</b>: "
-            f"готовы обсудить снижение цены на <b>{int(discount * 100)}%</b> "
-            f"от ориентира <b>{html_module.escape(str(price))}</b> USD — "
-            f"то есть <b>{html_module.escape(str(new_price))}</b> USD.</p>"
+            f"<p>Спасибо за ответ по площадке <b>{esc_dom}</b> — ценим ваше время и готовность к диалогу.</p>"
+            f"<p><b>Не могли бы мы договориться о небольшой скидке</b>, порядка <b>{pct}%</b> от озвученной суммы? "
+            f"Тогда ориентир составил бы <b>{esc_new}</b> USD вместо <b>{esc_price}</b> USD. "
+            f"Если такой вариант вам подходит, с радостью продолжим.</p>"
+            f"<p>С уважением</p>"
         )
         try:
             send_smtp_html(
