@@ -25,6 +25,16 @@ def _env_int(key: str, default: int) -> int:
         return default
 
 
+def _env_float(key: str, default: float) -> float:
+    raw = _env(key, "")
+    if not raw:
+        return default
+    try:
+        return float(raw.replace(",", ".").strip())
+    except ValueError:
+        return default
+
+
 @dataclass
 class AppConfig:
     # Canonical spreadsheet IDs (from implementation-notes / HACK-382)
@@ -66,6 +76,15 @@ class AppConfig:
     # Extra substrings to match Linkbuilder column (e.g. Oleg vs Олег)
     linkbuilder_aliases: list[str]
 
+    # «Торг»: подстрока для колонки ответственного в калькуляторе (или несколько через |). Пусто → только LINKBUILDER_*
+    trade_responsible_name: str
+    # Часовой пояс для «сегодня» (ДД.ММ.ГГГГ)
+    trade_timezone: str
+    # Точный заголовок столбца с датой торга в калькуляторе (ДД.ММ.ГГГГ); пусто — эвристика по «дата»
+    col_trade_date: str
+    # Доля скидки (0.2 = минус 20 %)
+    trade_discount_percent: float
+
 
 def _secrets_lookup_raw(secrets: Any, key: str) -> Any:
     """Streamlit versions differ: prefer __getitem__, then .get(), then attribute."""
@@ -95,6 +114,16 @@ def _secrets_get(secrets: Any, key: str, default: str = "") -> str:
             v = default
         return str(v).strip() if v is not None else default
     except Exception:
+        return default
+
+
+def _secrets_get_float(secrets: Any, key: str, default: float) -> float:
+    raw = _secrets_get(secrets, key, "")
+    if not raw:
+        return default
+    try:
+        return float(raw.replace(",", ".").strip())
+    except ValueError:
         return default
 
 
@@ -202,6 +231,20 @@ def load_config(secrets: Any | None = None) -> AppConfig:
             secrets,
             "LINKBUILDER_ALIASES",
             ["Oleg", "oleg"],
+        ),
+        trade_responsible_name=_secrets_get(secrets, "TRADE_RESPONSIBLE_NAME", _env("TRADE_RESPONSIBLE_NAME", "")),
+        trade_timezone=_secrets_get(secrets, "TRADE_TIMEZONE", _env("TRADE_TIMEZONE", "Europe/Moscow")),
+        col_trade_date=_secrets_get(secrets, "COL_TRADE_DATE", _env("COL_TRADE_DATE", "")),
+        trade_discount_percent=max(
+            0.0,
+            min(
+                0.95,
+                _secrets_get_float(
+                    secrets,
+                    "TRADE_DISCOUNT_PERCENT",
+                    _env_float("TRADE_DISCOUNT_PERCENT", 0.2),
+                ),
+            ),
         ),
     )
 

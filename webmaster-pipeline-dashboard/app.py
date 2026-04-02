@@ -26,6 +26,7 @@ from googleapiclient.errors import HttpError
 from lib.config import _secrets_get, _secrets_get_int, load_config, load_service_account_info, use_google_adc
 from lib.mail_imap import fetch_unread_summaries
 from lib.mail_smtp import send_smtp_html
+from lib.trade_bargain import run_trade_bargain_round
 from lib.webmaster_inbox_sync import sync_unseen_webmasters_to_inbox_sheet
 from lib.sheets_service import (
     a1_all_columns,
@@ -43,7 +44,7 @@ from lib.sheets_service import (
 )
 
 # Меняйте при каждом релизе UI — в подписи под заголовком видно, что Cloud подтянул новый код.
-PANEL_UI_BUILD = "mail-ui-2026-04-03c"
+PANEL_UI_BUILD = "mail-ui-2026-04-04a"
 
 st.set_page_config(
     page_title="Linkbuilding — панель вебмастеров",
@@ -413,6 +414,8 @@ def main():
 
     if "imap_sync_report" not in st.session_state:
         st.session_state.imap_sync_report = None
+    if "trade_bargain_report" not in st.session_state:
+        st.session_state.trade_bargain_report = None
 
     qa1, qa2, qa3, qa4 = st.columns(4, gap="small")
     with qa1:
@@ -477,7 +480,23 @@ def main():
                 )
     with qa2:
         if st.button("торг", key="qa_trade", use_container_width=True, type="primary"):
-            _quick_notify("Сценарий «торг» — заготовка; логику можно добавить позже.")
+            sm_host, sm_port, sm_user, sm_pass = _effective_gmail_smtp_settings(_secrets_obj)
+            st.session_state.trade_bargain_report = run_trade_bargain_round(
+                sheets_service=svc,
+                cfg=cfg,
+                smtp_host=sm_host,
+                smtp_port=sm_port,
+                smtp_user=sm_user,
+                smtp_password=sm_pass,
+            )
+            tr = st.session_state.trade_bargain_report
+            if tr.get("errors") and tr.get("sent", 0) == 0:
+                try:
+                    st.toast("Торг: ошибка или нет строк (см. отчёт)", icon="⚠️")
+                except Exception:
+                    pass
+            else:
+                _quick_notify(f"Торг: отправлено писем {tr.get('sent', 0)} · строк за сегодня: {tr.get('rows_matched', 0)}")
     with qa3:
         if st.button("отправить статьи", key="qa_send", use_container_width=True, type="primary"):
             _quick_notify("Вкладка «Жду публикации → отправка» — выбор строки и отправка письма.")
@@ -543,6 +562,34 @@ def main():
                 st.info("Нет непрочитанных писем в ящике.")
             if st.button("Скрыть отчёт", key="imap_sync_clear"):
                 st.session_state.imap_sync_report = None
+                st.rerun()
+
+    if st.session_state.trade_bargain_report is not None:
+        tr = st.session_state.trade_bargain_report
+        with st.expander("💬 Торг (калькулятор → «Сбор с ответов» → SMTP)", expanded=True):
+            st.caption(
+                "Строки **калькулятора** (вкладка `GID_CALCULATOR_TAB_1`), где в колонке **даты** стоит **сегодня** "
+                f"({tr.get('today', '…')} по **{cfg.trade_timezone}**), а в колонке **ответственного** есть одна из подстрок: "
+                f"{', '.join(repr(x) for x in (tr.get('needles') or [])[:12]) or '—'}. "
+                "Email вебмастера — **только** из таблицы **«Сбор с ответов»** (последняя по дате строка с тем же доменом). "
+                "Письмо: предложение снизить цену на долю из **TRADE_DISCOUNT_PERCENT** (по умолчанию 20 %). "
+                "Заголовок даты в калькуляторе при неоднозначности: **COL_TRADE_DATE** в Secrets; ответственный: **TRADE_RESPONSIBLE_NAME**."
+            )
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Сегодня (фильтр)", tr.get("today", "—"))
+            c2.metric("Доменов к отправке", tr.get("rows_matched", 0))
+            c3.metric("Отправлено SMTP", tr.get("sent", 0))
+            c4.metric("Доменов обработано", tr.get("domains_considered", 0))
+            for err in tr.get("errors") or []:
+                st.error(err)
+            for se in tr.get("smtp_errors") or []:
+                st.warning(se)
+            skipped = tr.get("skipped") or []
+            if skipped:
+                st.warning("Пропуски:")
+                st.dataframe(pd.DataFrame(skipped), use_container_width=True, height=min(200, 60 + 28 * len(skipped)))
+            if st.button("Скрыть отчёт торг", key="trade_report_clear"):
+                st.session_state.trade_bargain_report = None
                 st.rerun()
 
     tab_stats, tab_reg, tab_wait, tab_inbox, tab_calc, tab_pay = st.tabs(
