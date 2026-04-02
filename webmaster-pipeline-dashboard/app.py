@@ -44,7 +44,7 @@ from lib.sheets_service import (
 )
 
 # Меняйте при каждом релизе UI — в подписи под заголовком видно, что Cloud подтянул новый код.
-PANEL_UI_BUILD = "mail-ui-2026-04-04d"
+PANEL_UI_BUILD = "mail-ui-2026-04-05a"
 
 st.set_page_config(
     page_title="Linkbuilding — панель вебмастеров",

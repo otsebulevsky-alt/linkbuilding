@@ -177,11 +177,13 @@ def resolve_inbox_email_col(df: pd.DataFrame) -> str | None:
 
 
 def resolve_inbox_date_col(df: pd.DataFrame) -> str | None:
+    """Колонка даты: «дата» / «date» (как в шапке «Сбор с ответов»); иначе второй столбец (B после «Домен»)."""
     if df is None or df.empty:
         return None
-    for c in df.columns:
-        if _norm_header(c) == "дата":
-            return str(c)
+    norm_map = {_norm_header(c): str(c) for c in df.columns}
+    for key in ("дата", "date"):
+        if key in norm_map:
+            return norm_map[key]
     if len(df.columns) > 1:
         return str(df.columns[1])
     return None

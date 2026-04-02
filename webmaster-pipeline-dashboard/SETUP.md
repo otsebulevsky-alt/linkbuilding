@@ -34,7 +34,7 @@
 
 Для email **`client_email`** из скачанного JSON (у текущего ключа в проекте это **`dashboard@dashboard-486316.iam.gserviceaccount.com`** — при смене JSON сверяйте поле `client_email` в файле).
 
-1. Откройте **каждую** таблицу из списка ниже → **Настройки доступа** (Share) → добавьте этот email с ролью **Читатель** (или **Редактор**, если позже понадобится запись из приложения).
+1. Откройте **каждую** таблицу из списка ниже → **Настройки доступа** (Share) → добавьте этот email с ролью **Читатель** или **Редактор** (см. примечание после таблицы).
 
 | Назначение | Ссылка (с нужным `gid` вкладки) |
 |------------|--------------------------------|
@@ -43,6 +43,8 @@
 | Реестр 1 TelecomAsia Anchors | [Открыть](https://docs.google.com/spreadsheets/d/1S5lk-ya4iWwq5znY_vebAuTqloyTlWTcsNuXydZXT00/edit?gid=728254189#gid=728254189) |
 | Калькулятор цены (вкладка по умолчанию в коде: `GID_CALCULATOR_TAB_1` = 225938948) | [Открыть](https://docs.google.com/spreadsheets/d/1xrjeVD0Q94JI08v2gFvtv1NbiTAbq0fSjv-A-g5pPSs/edit?gid=225938948#gid=225938948) |
 | Служебная (сбор ответов вебмастеров — дефолт в коде: `SPREADSHEET_INBOX_LOG_ID`) | [Открыть](https://docs.google.com/spreadsheets/d/19dMDf3sxH8RuBI6hZwWwen_cm2A_UOQZdXVtcjMRllc/edit?gid=0#gid=0) |
+
+**Роли для кнопок «Прочитать почту» и «торг»:** книга **«Сбор с ответов»** — обязательно **Редактор** (запись строк из IMAP). **Калькулятор** — достаточно **Читатель** (кнопка «торг» только читает лист). Остальные книги из таблицы — минимум **Читатель**, если не требуется запись из приложения.
 
 По умолчанию в [`lib/config.py`](lib/config.py) как **inbox** указан ID **`19dMDf3sx...`**. Если основная служебная таблица — книга **`17MoDWnMes...`**, задайте в `.streamlit/secrets.toml`:  
 `SPREADSHEET_INBOX_LOG_ID = "17MoDWnMesQkpmI9bSZAF5LYQpjyM2itU0PpcaS-X240"`.

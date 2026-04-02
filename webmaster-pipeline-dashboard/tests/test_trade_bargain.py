@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import unittest
 
+import pandas as pd
+
 from lib.trade_bargain import (
     cell_matches_responsible,
     collect_responsible_needles,
+    find_webmaster_email_in_inbox_log,
     normalize_domain_cell,
     parse_price_number,
 )
@@ -35,6 +38,34 @@ class TestTradeBargain(unittest.TestCase):
         self.assertTrue(any("Tsebulevskiy" in n for n in needles))
         self.assertTrue(cell_matches_responsible("Oleg Tsebulevskiy", needles))
         self.assertFalse(cell_matches_responsible("Someone Else", needles))
+
+    def test_find_email_sorts_by_ymd_from_mail_sync(self) -> None:
+        """Даты из IMAP-синка в «Сбор с ответов» — ГГГГ-ММ-ДД; берём самую свежую почту."""
+        df = pd.DataFrame(
+            [
+                {"Домен": "a.com", "дата": "2026-04-01", "Почта": "old@x.com"},
+                {"Домен": "a.com", "дата": "2026-04-03", "Почта": "new@x.com"},
+            ]
+        )
+        self.assertEqual(find_webmaster_email_in_inbox_log(df, "a.com"), "new@x.com")
+
+    def test_find_email_ddm_yyyy(self) -> None:
+        df = pd.DataFrame(
+            [
+                {"Домен": "b.io", "дата": "01.03.2026", "Почта": "first@y.com"},
+                {"Домен": "b.io", "дата": "15.03.2026", "Почта": "last@y.com"},
+            ]
+        )
+        self.assertEqual(find_webmaster_email_in_inbox_log(df, "b.io"), "last@y.com")
+
+    def test_find_email_english_date_header(self) -> None:
+        df = pd.DataFrame(
+            [
+                {"Домен": "c.org", "Date": "2026-02-01", "Почта": "a@c.org"},
+                {"Домен": "c.org", "Date": "2026-02-10", "Почта": "b@c.org"},
+            ]
+        )
+        self.assertEqual(find_webmaster_email_in_inbox_log(df, "c.org"), "b@c.org")
 
 
 if __name__ == "__main__":
