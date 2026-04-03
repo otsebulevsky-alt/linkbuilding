@@ -11,6 +11,60 @@ from email.utils import getaddresses, parseaddr
 
 from lib.trade_bargain import normalize_domain_cell
 
+# Имена вроде [Gmail]/Sent Mail по RFC 3501 — quoted string; иначе imaplib шлёт байты без кавычек
+# и часть серверов отвечает BAD / обрывает команду по пробелу.
+_ATOM_MAILBOX_RE = re.compile(r"^[A-Za-z0-9._\-%+]+$")
+
+
+def _mailbox_arg_for_imap(logical_name: str) -> str:
+    """Аргумент для IMAP SELECT/EXAMINE: INBOX / atom или \"...\" для имён с пробелами и скобками."""
+    n = (logical_name or "").strip()
+    if not n:
+        return '""'
+    if n.upper() == "INBOX":
+        return n
+    if _ATOM_MAILBOX_RE.fullmatch(n):
+        return n
+    inner = n.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{inner}"'
+
+
+def _select_mailbox_examine(imap: imaplib.IMAP4_SSL, logical_name: str) -> tuple[bool, str]:
+    """EXAMINE (readonly) с RFC-кавычками и запасными именами для Gmail Sent."""
+    logical = (logical_name or "").strip()
+    candidates: list[str] = []
+    seen_log: set[str] = set()
+
+    def add_logical(name: str) -> None:
+        x = (name or "").strip()
+        if not x or x in seen_log:
+            return
+        seen_log.add(x)
+        candidates.append(x)
+
+    add_logical(logical)
+    low = logical.lower()
+    if "sent" in low:
+        if re.search(r"\[gmail\]", logical, re.I):
+            add_logical(re.sub(r"(?i)\[gmail\]", "[Google Mail]", logical))
+        if re.search(r"\[google mail\]", logical, re.I):
+            add_logical(re.sub(r"(?i)\[google mail\]", "[Gmail]", logical))
+
+    last_detail = ""
+    for log in candidates:
+        wire = _mailbox_arg_for_imap(log)
+        try:
+            typ, _ = imap.select(wire, readonly=True)
+        except Exception as e:
+            msg = str(e).replace("\r", " ").replace("\n", " ").strip()[:160]
+            last_detail = f"{type(e).__name__}:{msg}"
+            continue
+        if typ == "OK":
+            return True, ""
+        last_detail = f"typ={typ}"
+
+    return False, last_detail
+
 
 def _decode_mime(s: str | None) -> str:
     if not s:
@@ -316,13 +370,11 @@ def find_reply_context_for_peer(
             # Только SEARCH/FETCH — пишем по SMTP, не через IMAP. Gmail помечает [Gmail]/Sent Mail и др. как
             # READ-ONLY; imap.select(..., readonly=False) тогда бросает IMAP4.readonly → ложный «select_error».
             for mbox in _mailboxes_for_thread_search(imap_mailbox, imap):
-                try:
-                    typ, _ = imap.select(mbox, readonly=True)
-                except Exception:
-                    extra_select_errors.append(f"select_error:{mbox}")
-                    continue
-                if typ != "OK":
-                    extra_select_errors.append(f"select_failed:{mbox}")
+                ok_open, open_detail = _select_mailbox_examine(imap, mbox)
+                if not ok_open:
+                    extra_select_errors.append(
+                        f"select_error:{mbox}" + (f" ({open_detail})" if open_detail else "")
+                    )
                     continue
 
                 batch_sizes: list[int] = []

@@ -9,6 +9,7 @@ from lib.mail_thread_lookup import (
     _build_references,
     _extract_last_quoted_mailbox_from_list_row,
     _headers_mention_domain,
+    _mailbox_arg_for_imap,
     _mailboxes_for_thread_search,
     _normalize_msg_id,
 )
@@ -92,6 +93,16 @@ class TestMailThreadLookup(unittest.TestCase):
         name = _extract_last_quoted_mailbox_from_list_row(row)
         self.assertIsNotNone(name)
         self.assertTrue(name.startswith("[Gmail]/"))
+
+    def test_mailbox_arg_inbox_atom(self) -> None:
+        self.assertEqual(_mailbox_arg_for_imap("INBOX"), "INBOX")
+        self.assertEqual(_mailbox_arg_for_imap("inbox"), "inbox")
+
+    def test_mailbox_arg_gmail_sent_quoted(self) -> None:
+        w = _mailbox_arg_for_imap("[Gmail]/Sent Mail")
+        self.assertTrue(w.startswith('"'))
+        self.assertTrue(w.endswith('"'))
+        self.assertIn("[Gmail]/Sent Mail", w)
 
 
 if __name__ == "__main__":
