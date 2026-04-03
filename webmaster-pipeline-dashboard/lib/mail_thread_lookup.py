@@ -107,76 +107,79 @@ def find_reply_context_for_peer(
     except OSError:
         return None
 
-    with imap_cm as imap:
-        try:
-            imap.login(imap_user, imap_password)
-        except imaplib.IMAP4.error:
-            return None
-        typ, _ = imap.select(imap_mailbox)
-        if typ != "OK":
-            return None
-
-        def _parse_uid_list(data) -> list[int]:
-            if not data or not data[0]:
-                return []
-            chunk = data[0]
-            if isinstance(chunk, bytes):
-                chunk = chunk.decode("ascii", errors="replace")
-            return [int(x) for x in str(chunk).split() if x.isdigit()]
-
-        uids: list[int] = []
-        raw_q = f"(from:{peer} OR to:{peer}) {dom}"
-        try:
-            typ, data = imap.uid("SEARCH", None, "X-GM-RAW", raw_q)
-            if typ == "OK":
-                uids = _parse_uid_list(data)
-        except imaplib.IMAP4.error:
-            uids = []
-
-        if not uids:
+    try:
+        with imap_cm as imap:
             try:
-                typ, data = imap.search(None, "TEXT", dom)
+                imap.login(imap_user, imap_password)
+            except imaplib.IMAP4.error:
+                return None
+            typ, _ = imap.select(imap_mailbox)
+            if typ != "OK":
+                return None
+
+            def _parse_uid_list(data) -> list[int]:
+                if not data or not data[0]:
+                    return []
+                chunk = data[0]
+                if isinstance(chunk, bytes):
+                    chunk = chunk.decode("ascii", errors="replace")
+                return [int(x) for x in str(chunk).split() if x.isdigit()]
+
+            uids: list[int] = []
+            raw_q = f"(from:{peer} OR to:{peer}) {dom}"
+            try:
+                typ, data = imap.uid("SEARCH", None, "X-GM-RAW", raw_q)
                 if typ == "OK":
                     uids = _parse_uid_list(data)
             except imaplib.IMAP4.error:
                 uids = []
 
-        if not uids:
+            if not uids:
+                try:
+                    typ, data = imap.search(None, "TEXT", dom)
+                    if typ == "OK":
+                        uids = _parse_uid_list(data)
+                except imaplib.IMAP4.error:
+                    uids = []
+
+            if not uids:
+                return None
+
+            uids.sort(reverse=True)
+            for uid in uids[:max_uids_to_scan]:
+                try:
+                    typ, msg_data = imap.uid("FETCH", str(uid), "(BODY.PEEK[HEADER])")
+                except Exception:
+                    continue
+                if typ != "OK" or not msg_data:
+                    continue
+                raw: bytes | None = None
+                for chunk in msg_data:
+                    if isinstance(chunk, tuple) and len(chunk) >= 2:
+                        cand = chunk[1]
+                        if isinstance(cand, (bytes, bytearray)):
+                            raw = bytes(cand)
+                            break
+                if raw is None:
+                    continue
+                try:
+                    msg = email.message_from_bytes(raw)
+                except Exception:
+                    continue
+                if not _header_peer_match(msg, peer):
+                    continue
+                subj = _decode_mime(msg.get("Subject"))
+                mid_raw = _decode_mime(msg.get("Message-ID")).strip()
+                if not mid_raw:
+                    continue
+                mid_n = _normalize_msg_id(mid_raw)
+                refs = _build_references(msg)
+                return {
+                    "message_id": mid_n,
+                    "references": refs,
+                    "subject": _reply_subject(subj)[:998],
+                }
+
             return None
-
-        uids.sort(reverse=True)
-        for uid in uids[:max_uids_to_scan]:
-            try:
-                typ, msg_data = imap.uid("FETCH", str(uid), "(BODY.PEEK[HEADER])")
-            except Exception:
-                continue
-            if typ != "OK" or not msg_data:
-                continue
-            raw: bytes | None = None
-            for chunk in msg_data:
-                if isinstance(chunk, tuple) and len(chunk) >= 2:
-                    cand = chunk[1]
-                    if isinstance(cand, (bytes, bytearray)):
-                        raw = bytes(cand)
-                        break
-            if raw is None:
-                continue
-            try:
-                msg = email.message_from_bytes(raw)
-            except Exception:
-                continue
-            if not _header_peer_match(msg, peer):
-                continue
-            subj = _decode_mime(msg.get("Subject"))
-            mid_raw = _decode_mime(msg.get("Message-ID")).strip()
-            if not mid_raw:
-                continue
-            mid_n = _normalize_msg_id(mid_raw)
-            refs = _build_references(msg)
-            return {
-                "message_id": mid_n,
-                "references": refs,
-                "subject": _reply_subject(subj)[:998],
-            }
-
+    except Exception:
         return None

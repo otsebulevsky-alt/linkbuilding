@@ -17,6 +17,7 @@ if str(_APP_DIR) not in sys.path:
 
 import html
 import json
+import traceback
 from datetime import datetime
 
 import pandas as pd
@@ -28,7 +29,7 @@ from lib.mail_imap import fetch_unread_summaries
 from lib.mail_smtp import send_smtp_html
 from lib.article_publish_batch import run_article_publish_batch
 from lib.publication_check_batch import run_publication_check_batch
-from lib.trade_bargain import run_trade_bargain_round
+from lib.trade_bargain import collect_responsible_needles, run_trade_bargain_round
 from lib.inbox_sheet_dedupe import dedupe_and_highlight_inbox_sheet
 from lib.webmaster_inbox_sync import sync_unseen_webmasters_to_inbox_sheet
 from lib.sheets_service import (
@@ -47,7 +48,41 @@ from lib.sheets_service import (
 )
 
 # Меняйте при каждом релизе UI — в подписи под заголовком видно, что Cloud подтянул новый код.
-PANEL_UI_BUILD = "panel-2026-04-03-trade-window-diagnostics"
+PANEL_UI_BUILD = "panel-2026-04-03-trade-crash-guard"
+
+
+def _safe_trade_filter_stats(fs: object) -> dict[str, int]:
+    """st.json и метрики не любят numpy-типы; приводим к int."""
+    if not isinstance(fs, dict):
+        return {}
+    out: dict[str, int] = {}
+    for k, v in fs.items():
+        key = str(k)
+        try:
+            out[key] = int(v)
+        except (TypeError, ValueError):
+            try:
+                out[key] = int(getattr(v, "item", lambda: v)())
+            except Exception:
+                out[key] = 0
+    return out
+
+
+def _trade_bargain_report_shell(cfg, *, errors: list[str]) -> dict:
+    return {
+        "errors": errors,
+        "today": "",
+        "calc_sheet_title": "",
+        "calc_trade_date_column": "",
+        "trade_date_max_age_days": int(getattr(cfg, "trade_date_max_age_days", 0) or 0),
+        "filter_stats": {},
+        "needles": collect_responsible_needles(cfg),
+        "rows_matched": 0,
+        "domains_considered": 0,
+        "sent": 0,
+        "skipped": [],
+        "smtp_errors": [],
+    }
 
 st.set_page_config(
     page_title="Linkbuilding — панель вебмастеров",
@@ -496,34 +531,40 @@ def main():
             sm_host, sm_port, sm_user, sm_pass = _effective_gmail_smtp_settings(_secrets_obj)
             im_u, im_p = _effective_gmail_imap_credentials(_secrets_obj)
             if not im_u or not im_p:
-                st.session_state.trade_bargain_report = {
-                    "errors": [
+                st.session_state.trade_bargain_report = _trade_bargain_report_shell(
+                    cfg,
+                    errors=[
                         "Нет доступа к **IMAP**: без него нельзя найти тред для ответа. Задайте в Secrets "
                         "**GMAIL_IMAP_USER** / **GMAIL_IMAP_APP_PASSWORD** или **GMAIL_SMTP_*** (как для "
                         "**«Прочитать почту»**). После сохранения — **Reboot app**."
                     ],
-                    "today": "",
-                    "needles": [],
-                    "rows_matched": 0,
-                    "domains_considered": 0,
-                    "sent": 0,
-                    "skipped": [],
-                    "smtp_errors": [],
-                }
-            else:
-                st.session_state.trade_bargain_report = run_trade_bargain_round(
-                    sheets_service=svc,
-                    cfg=cfg,
-                    smtp_host=sm_host,
-                    smtp_port=sm_port,
-                    smtp_user=sm_user,
-                    smtp_password=sm_pass,
-                    imap_host="imap.gmail.com",
-                    imap_user=im_u,
-                    imap_password=im_p,
-                    imap_mailbox=cfg.imap_mailbox,
-                    imap_timeout_sec=cfg.imap_sync_timeout_sec,
                 )
+            else:
+                try:
+                    st.session_state.trade_bargain_report = run_trade_bargain_round(
+                        sheets_service=svc,
+                        cfg=cfg,
+                        smtp_host=sm_host,
+                        smtp_port=sm_port,
+                        smtp_user=sm_user,
+                        smtp_password=sm_pass,
+                        imap_host="imap.gmail.com",
+                        imap_user=im_u,
+                        imap_password=im_p,
+                        imap_mailbox=cfg.imap_mailbox,
+                        imap_timeout_sec=cfg.imap_sync_timeout_sec,
+                    )
+                except Exception as e:
+                    tb_tail = traceback.format_exc()[-3500:]
+                    rep = _trade_bargain_report_shell(
+                        cfg,
+                        errors=[
+                            f"Сбой при «торг» (**{type(e).__name__}**): {e}. "
+                            "Частые причины: таймаут Streamlit Cloud при долгом IMAP, сеть, ошибка Google Sheets API."
+                        ],
+                    )
+                    rep["traceback"] = tb_tail
+                    st.session_state.trade_bargain_report = rep
             tr = st.session_state.trade_bargain_report
             if tr.get("errors") and tr.get("sent", 0) == 0:
                 try:
@@ -744,24 +785,37 @@ def main():
             )
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("Сегодня (фильтр)", tr.get("today", "—"))
-            c2.metric("Доменов к отправке", tr.get("rows_matched", 0))
-            c3.metric("Отправлено SMTP", tr.get("sent", 0))
-            c4.metric("Доменов обработано", tr.get("domains_considered", 0))
+            c2.metric("Доменов к отправке", int(tr.get("rows_matched", 0) or 0))
+            c3.metric("Отправлено SMTP", int(tr.get("sent", 0) or 0))
+            c4.metric("Доменов обработано", int(tr.get("domains_considered", 0) or 0))
             fs = tr.get("filter_stats") or {}
             if fs:
                 st.caption(
                     f"Лист калькулятора: **{tr.get('calc_sheet_title') or '—'}** · "
                     f"окно дат: **{tr.get('trade_date_max_age_days', 0)}** дн. (0 = только сегодня)"
                 )
-                st.json(fs)
+                try:
+                    st.json(_safe_trade_filter_stats(fs))
+                except Exception:
+                    st.write(_safe_trade_filter_stats(fs))
             for err in tr.get("errors") or []:
                 st.error(err)
+            if tr.get("traceback"):
+                with st.expander("Трассировка ошибки «торг» (для логов / поддержки)"):
+                    st.code(str(tr.get("traceback")), language="python")
             for se in tr.get("smtp_errors") or []:
                 st.warning(se)
             skipped = tr.get("skipped") or []
             if skipped:
                 st.warning("Пропуски:")
-                st.dataframe(pd.DataFrame(skipped), use_container_width=True, height=min(200, 60 + 28 * len(skipped)))
+                try:
+                    st.dataframe(
+                        pd.DataFrame(skipped),
+                        use_container_width=True,
+                        height=min(200, 60 + 28 * len(skipped)),
+                    )
+                except Exception:
+                    st.write(skipped)
             if st.button("Скрыть отчёт торг", key="trade_report_clear"):
                 st.session_state.trade_bargain_report = None
                 st.rerun()
