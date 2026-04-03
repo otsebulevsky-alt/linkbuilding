@@ -56,7 +56,7 @@ from lib.sheets_service import (
 )
 
 # Меняйте при каждом релизе UI — в подписи под заголовком видно, что Cloud подтянул новый код.
-PANEL_UI_BUILD = "panel-2026-04-03-streamlit-144-guards-runonsave"
+PANEL_UI_BUILD = "panel-2026-04-03-inbox-email-cell-parse-first-address"
 
 
 def _safe_trade_filter_stats(fs: object) -> dict[str, int]:
@@ -851,6 +851,7 @@ def main():
                 "В колонке **ответственного** — одна из подстрок: "
                 f"{', '.join(repr(x) for x in (tr.get('needles') or [])[:12]) or '—'}. "
                 "Email вебмастера — **только** из таблицы **«Сбор с ответов»** (последняя по дате строка с тем же доменом). "
+                "Если в ячейке **«Почта»** после адреса идёт текст ответа — берётся **первый email** в ячейке (иначе IMAP-запрос ломался). "
                 "По **IMAP** ищется переписка с этим адресом и доменом; письмо уходит **ответом в тот же тред** "
                 "(тема **Re:** из найденного письма, In-Reply-To / References). "
                 "Без треда в ящике — пропуск **no_imap_thread**. "

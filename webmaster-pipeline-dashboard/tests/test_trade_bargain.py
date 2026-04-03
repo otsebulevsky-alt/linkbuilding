@@ -11,6 +11,7 @@ from lib.trade_bargain import (
     cell_matches_responsible,
     collect_responsible_needles,
     discover_calculator_dataframe_from_rows,
+    extract_first_email_from_inbox_cell,
     find_webmaster_email_in_inbox_log,
     normalize_domain_cell,
     parse_calc_trade_date_to_ymd,
@@ -74,6 +75,29 @@ class TestTradeBargain(unittest.TestCase):
             ]
         )
         self.assertEqual(find_webmaster_email_in_inbox_log(df, "c.org"), "b@c.org")
+
+    def test_extract_email_when_cell_has_reply_text_after_address(self) -> None:
+        cell = (
+            "camilanascimento98@gmail.com Could you please let us know if payment "
+            "via cryptocurrency (e.g. USDT) or PayPal would be possible?"
+        )
+        self.assertEqual(extract_first_email_from_inbox_cell(cell), "camilanascimento98@gmail.com")
+
+    def test_find_email_strips_trailing_reply_text(self) -> None:
+        """Как в «Сбор с ответов»: в одной ячейке email + текст вебмастера — в IMAP уходит только email."""
+        df = pd.DataFrame(
+            [
+                {
+                    "Домен": "panafricafootball.com",
+                    "дата": "2026-04-03",
+                    "Почта": "camilanascimento98@gmail.com Could you please let us know if payment via PayPal would be possible?",
+                },
+            ]
+        )
+        self.assertEqual(
+            find_webmaster_email_in_inbox_log(df, "panafricafootball.com"),
+            "camilanascimento98@gmail.com",
+        )
 
     def test_resolve_trade_date_explicit_comment_column(self) -> None:
         df = pd.DataFrame(

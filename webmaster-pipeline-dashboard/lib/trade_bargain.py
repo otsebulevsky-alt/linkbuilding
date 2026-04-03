@@ -6,6 +6,7 @@ import html as html_module
 import re
 import unicodedata
 from datetime import date, datetime, timedelta
+from email.utils import getaddresses, parseaddr
 from typing import Any
 
 import pandas as pd
@@ -500,6 +501,38 @@ def resolve_inbox_price_col(df: pd.DataFrame) -> str | None:
     return None
 
 
+# Ячейка «Почта» в «Сбор с ответов» часто = email + текст ответа вебмастера в одной строке;
+# весь текст уходил в IMAP как peer → X-GM-RAW ломается и _header_peer_match не срабатывает.
+# Важно: email.utils.parseaddr для «user@host.com Could you…» в Python склеивает пробелы и даёт
+# невалидный «адрес» с хвостом — поэтому сначала regex с \b после TLD.
+_EMAIL_IN_CELL_RE = re.compile(
+    r"\b[a-zA-Z0-9][a-zA-Z0-9._%+-]*@[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,}\b",
+    re.IGNORECASE,
+)
+
+
+def extract_first_email_from_inbox_cell(raw: str) -> str:
+    """Первый email из ячейки: только адрес, без хвоста «Could you please…»."""
+    s = (raw or "").strip()
+    if not s:
+        return ""
+    first_line = re.split(r"[\r\n]+", s, maxsplit=1)[0].strip()
+    m = _EMAIL_IN_CELL_RE.search(first_line)
+    if m:
+        return m.group(0).strip()
+    # «Имя» <addr@host> — без пробела после > parseaddr уместен
+    _, addr = parseaddr(first_line)
+    if addr and "@" in addr and "." in addr.rsplit("@", 1)[-1]:
+        addr = addr.strip()
+        if _EMAIL_IN_CELL_RE.fullmatch(addr):
+            return addr
+    for _, a in getaddresses([first_line]):
+        a = (a or "").strip()
+        if a and _EMAIL_IN_CELL_RE.fullmatch(a):
+            return a
+    return ""
+
+
 def _parse_inbox_date_sort_key(raw: str) -> tuple:
     s = (raw or "").strip()
     if not s:
@@ -526,7 +559,8 @@ def find_webmaster_email_in_inbox_log(df_inbox: pd.DataFrame, domain: str) -> st
     for _, row in df_inbox.iterrows():
         if normalize_domain_cell(row.get(dom_c, "")) != nd:
             continue
-        mail = str(row.get(mail_c, "") or "").strip()
+        mail_raw = str(row.get(mail_c, "") or "").strip()
+        mail = extract_first_email_from_inbox_cell(mail_raw)
         if not mail or "@" not in mail:
             continue
         d_raw = str(row.get(date_c, "") or "").strip() if date_c else ""
