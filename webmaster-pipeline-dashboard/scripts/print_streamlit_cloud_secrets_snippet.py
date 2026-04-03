@@ -39,6 +39,17 @@ def main() -> None:
     print(raw)
     print("'''")
     print()
+    try:
+        ce = str(data.get("client_email") or "").strip()
+    except Exception:
+        ce = ""
+    if ce:
+        print(f"# Share all required spreadsheets with this address (Viewer or Editor): {ce}")
+    print()
+    print("# Optional: book IDs match app defaults — you may omit these keys entirely.")
+    print('# SPREADSHEET_CALCULATOR_ID = "1xrjeVD0Q94JI08v2gFvtv1NbiTAbq0fSjv-A-g5pPSs"')
+    print('# GID_CALCULATOR_TAB_1 = "225938948"')
+    print()
     print('LINKBUILDER_FILTER = "Олег"')
     print('LINKBUILDER_ALIASES = "Oleg,oleg"')
     print('TRADE_RESPONSIBLE_NAME = "Oleg Tsebulevskiy"')

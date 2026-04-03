@@ -24,7 +24,14 @@ import pandas as pd
 import streamlit as st
 from googleapiclient.errors import HttpError
 
-from lib.config import _secrets_get, _secrets_get_int, load_config, load_service_account_info, use_google_adc
+from lib.config import (
+    _secrets_get,
+    _secrets_get_int,
+    load_config,
+    load_service_account_info,
+    service_account_client_email,
+    use_google_adc,
+)
 from lib.mail_imap import fetch_unread_summaries
 from lib.mail_smtp import send_smtp_html
 from lib.article_publish_batch import run_article_publish_batch
@@ -49,7 +56,7 @@ from lib.sheets_service import (
 )
 
 # Меняйте при каждом релизе UI — в подписи под заголовком видно, что Cloud подтянул новый код.
-PANEL_UI_BUILD = "panel-2026-03-30-calc-sheet-resolve-hints"
+PANEL_UI_BUILD = "panel-2026-03-30-sidebar-sheets-diagnostics"
 
 
 def _safe_trade_filter_stats(fs: object) -> dict[str, int]:
@@ -469,6 +476,46 @@ def main():
                 "Если организация запрещает JSON-ключи — см. README.md, раздел «Ключ JSON создать нельзя»."
             )
         st.stop()
+
+    ce_sa = service_account_client_email(sa_info)
+    calc_book = (cfg.spreadsheet_calculator_id or "").strip()
+    calc_gid = int(cfg.gid_calculator_tab_primary)
+    calc_url = (
+        f"https://docs.google.com/spreadsheets/d/{calc_book}/edit?gid={calc_gid}#gid={calc_gid}"
+        if calc_book
+        else ""
+    )
+    with st.sidebar:
+        st.markdown("---")
+        with st.expander("Google Sheets · калькулятор", expanded=False):
+            st.caption(
+                "**SPREADSHEET_CALCULATOR_ID** и **GID_CALCULATOR_TAB_1** в Secrets не обязательны — "
+                "если их нет, подставляются значения из кода (та же книга, что в HACK-382)."
+            )
+            if _use_adc:
+                st.caption(
+                    "Включён **GOOGLE_USE_ADC**: таблицы должны быть расшарены на **ваш** Google-аккаунт "
+                    "(как при `gcloud auth application-default login`), не на сервисный email."
+                )
+            if calc_book:
+                st.code(
+                    f"SPREADSHEET_CALCULATOR_ID\n{calc_book}\n\nGID_CALCULATOR_TAB_1\n{calc_gid}",
+                    language="text",
+                )
+            if calc_url:
+                st.markdown(f"[Открыть книгу калькулятора в браузере]({calc_url})")
+            if ce_sa and not _use_adc:
+                st.markdown(
+                    f"Чтобы API видел таблицы, добавьте в **Доступ** каждой книги email: `{html.escape(ce_sa)}` "
+                    "(роль **Читатель** или **Редактор**)."
+                )
+            elif not _use_adc and not ce_sa:
+                st.caption("Не удалось прочитать **client_email** из JSON сервисного аккаунта.")
+            t_calc_side, err_calc_side = resolve_calculator_sheet_title(svc, calc_book, calc_gid)
+            if t_calc_side:
+                st.success(f"Проверка API: вкладка **{html.escape(t_calc_side)}**")
+            elif err_calc_side:
+                st.markdown(err_calc_side)
 
     def _quick_notify(msg: str) -> None:
         try:

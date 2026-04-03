@@ -399,6 +399,13 @@ def _service_account_from_secrets_value(val: Any) -> dict | None:
     return None
 
 
+def service_account_client_email(info: dict | None) -> str:
+    """Email сервисного аккаунта для шаринга таблиц Google (поле client_email в JSON)."""
+    if not isinstance(info, dict):
+        return ""
+    return str(info.get("client_email") or "").strip()
+
+
 def load_service_account_info(secrets: Any | None) -> dict | None:
     """Service account dict: env, Streamlit secrets, then file paths (see order below)."""
     env_inline = _env("GOOGLE_SERVICE_ACCOUNT_JSON", "")
