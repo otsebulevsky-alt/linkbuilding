@@ -57,7 +57,7 @@
 
 Job **`mirror_github_streamlit`** в [`.gitlab-ci.yml`](../.gitlab-ci.yml) выполняется **только если** задана переменная **`GITHUB_TOKEN`**.
 
-**Что делает job (CI перед пушем на GitHub):** в образе **Python 3.12** ставятся зависимости из корневого [`requirements.txt`](../requirements.txt), затем в каталоге `webmaster-pipeline-dashboard/` выполняется **`python -m unittest discover -s tests -p "test_*.py"`**. Если тесты падают — зеркалирование **не** выполняется. После успешных тестов — `git push` в GitHub-репозиторий (ветка совпадает с текущей веткой в GitLab).
+**Что делает job (CI перед пушем на GitHub):** в образе **Python 3.12** ставятся зависимости из корневого [`requirements.txt`](../requirements.txt), затем в каталоге `webmaster-pipeline-dashboard/` выполняется **`python -m unittest discover -s tests -p "test_*.py"`**. Если тесты падают — зеркалирование **не** выполняется. После успешных тестов — `git push` в GitHub-репозиторий (ветка совпадает с текущей веткой в GitLab). **Streamlit Community Cloud** при этом деплоится с **Python 3.11** (этап F + [`runtime.txt`](../runtime.txt)) — так меньше шансов на **malloc/segfault** после установки колёс.
 
 1. Убедитесь, что последний коммит с `.gitlab-ci.yml` есть в вашей ветке (у вас уже пушили в `feature/seolb-164-webmaster-prospecting-oleg`).
 2. Сделайте любой **новый коммит** в эту ветку **или** в GitLab: **CI/CD → Pipelines → Run pipeline** → выберите ветку **`feature/seolb-164-webmaster-prospecting-oleg`** → **Run pipeline**.
@@ -80,7 +80,7 @@ Job **`mirror_github_streamlit`** в [`.gitlab-ci.yml`](../.gitlab-ci.yml) вы�
    - **Branch:** `feature/seolb-164-webmaster-prospecting-oleg`
    - **Main file path (рекомендуется):** `webmaster-pipeline-dashboard/app.py`, **App root** пустой — один процесс Streamlit, без шима `importlib`. **Альтернатива:** корневой [`app.py`](../app.py) (шим с `chdir` + загрузка дашборда). Зависимости только из **корневого** [`requirements.txt`](../requirements.txt) (**без** второго `requirements.txt` во вложенной папке и без `-r`, иначе в логах **«More than one requirement file»** и возможны **segfault** после установки пакетов).
    - **App URL (optional):** любое свободное имя (например `linkbuilding-webmaster`).
-   - **Python version** (в **Advanced settings** при первом деплое или **Manage app → Settings → General**): выберите **3.12** (семейство 3.12.x). Это соответствует [дефолту Community Cloud](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/deploy). **Не используйте Python 3.14** (и другие экспериментальные): с бинарными колёсами (`pandas`, `google-*`) процесс может падать с **`corrupted unsorted chunks`** и общим **«Oh no»** даже после успешной установки зависимостей.
+   - **Python version** (в **Advanced settings** при первом деплое или **Manage app → Settings → General**): выберите **3.11** (семейство 3.11.x), в паре с корневым [`runtime.txt`](../runtime.txt) **`python-3.11.10`**. **Не используйте 3.13 / 3.14**: с бинарными колёсами (`pandas`, `pyarrow`) процесс может падать с **`malloc(): unsorted double linked list corrupted` / `Aborted`**, **`corrupted unsorted chunks`** или **segfault** сразу после **«Processed dependencies!»** и общим **«Oh no»**.
    - **App root:** если **Main file path** = `webmaster-pipeline-dashboard/app.py` — поле **App root** оставьте **пустым**. Если **Main file path** = корневой `app.py` (шим) — **App root** тоже **пустой**. Не комбинируйте «корневой app.py + App root = webmaster-pipeline-dashboard» без необходимости (легко сломать путь к файлу).
 4. **Deploy**. Дождитесь окончания сборки (логи на экране). При ошибке импорта проверьте, что путь к `app.py` и App root согласованы (см. ниже «Oh no»).
 
@@ -264,9 +264,9 @@ git push -u github feature/seolb-164-webmaster-prospecting-oleg
 
 ## Если Cloud: «Oh no» / «The service has encountered an error» сразу после «Processed dependencies»
 
-1. **Версия Python в приложении:** **Manage app → Settings → General → Python version**. Должно быть **3.12** (или стабильная 3.11), **не 3.14**. При 3.14 в логах нередко встречается **`corrupted unsorted chunks`** — смените на **3.12**, **Save**, затем **Reboot app**. По документации Streamlit смена мажорной версии Python иногда требует пересоздать приложение; если после смены и перезапуска ошибка остаётся — удалите приложение и задеплойте снова с **Advanced settings → Python 3.12** (сохраните Secrets и URL в заметку заранее).
+1. **Версия Python в приложении:** **Manage app → Settings → General → Python version**. Рекомендуется **3.11** (в паре с корневым [`runtime.txt`](../runtime.txt) **`python-3.11.10`**). **Не используйте 3.13 / 3.14** — бинарные колёса `pandas`/`pyarrow` дают **segfault** или **`malloc(): unsorted double linked list corrupted` / `Aborted`** сразу после «Processed dependencies!». Установщик **uv** иногда **игнорирует** только `runtime.txt`: тогда вручную выставьте **Python 3.11** в UI, **Save**, **Reboot app**. Если после смены версии ошибка остаётся — пересоздайте приложение (Secrets и URL сохраните заранее).
 
-2. **Segmentation fault / health check `EOF` сразу после «Processed dependencies»** (в логах: `run-streamlit.sh` / **Signal 11**): (а) В **корне** зеркала GitHub `linkbuilding` (рядом с `requirements.txt`) должен быть **[`runtime.txt`](../runtime.txt)** со строкой **`python-3.12.8`**. Установщик **uv** на Community Cloud часто **не** подхватывает `runtime.txt` только из `webmaster-pipeline-dashboard/` — тогда может подняться **Python 3.13+**, и бинарные колёса дают **segfault**. **Commit → push** на GitHub, **Reboot app**. (б) Один корневой **`requirements.txt`**, без второго файла и без **`-r ...`**. Актуальные пины см. в [`requirements.txt`](../requirements.txt) (стек **streamlit 1.41.x + pandas 2.2.x + pyarrow 16.x** под Linux/Python 3.12; при смене версий синхронизируйте с этим абзацем). (в) В **Settings → General** вручную **Python 3.12** (не 3.13 / 3.14), **Save**, **Reboot**; при необходимости **Python 3.11** и **Main file path** = **`webmaster-pipeline-dashboard/app.py`**, **App root** пустой.
+2. **Segfault / malloc / `Aborted` сразу после «Processed dependencies»** (в логах: **Signal 11**, **`malloc(): unsorted double linked list corrupted`**, **`run-streamlit.sh` … Aborted**): (а) Корневой [`runtime.txt`](../runtime.txt) = **`python-3.11.10`** и в UI — **Python 3.11**. (б) Один корневой [`requirements.txt`](../requirements.txt): порядок **numpy → pyarrow 14.x → pandas → streamlit** (см. файл; при смене пинов обновите этот абзац). (в) Без второго `requirements.txt` и без **`-r ...`**. (г) **Main file path** = **`webmaster-pipeline-dashboard/app.py`**, **App root** пустой (или корневой шим `app.py` — см. этап F).
 
 3. **Порт / bind:** в [`.streamlit/config.toml`](.streamlit/config.toml) не должно быть **`server.port`** (например 8503) и **`server.address = "127.0.0.1"`** — иначе health check Cloud не проходит. Локальный порт **8503** — через [run.ps1](run.ps1).
 
@@ -294,11 +294,11 @@ git push -u github feature/seolb-164-webmaster-prospecting-oleg
 
 ## Чеклист после деплоя
 
-- [ ] **Python version** в **Settings → General** = **3.12** (не 3.14).
-- [ ] В **корне** репо есть **`runtime.txt`** (`python-3.12.8`) рядом с **`requirements.txt`**.
+- [ ] **Python version** в **Settings → General** = **3.11** (не 3.13 / 3.14).
+- [ ] В **корне** репо есть **`runtime.txt`** (`python-3.11.10`) рядом с **`requirements.txt`**.
 - [ ] В логах зависимости ставятся из **`.../requirements.txt` в корне** репо, без **`webmaster-pipeline-dashboard/requirements.txt`** и без **«More than one requirement file»**; **Main file path** = `webmaster-pipeline-dashboard/app.py`.
 - [ ] Таблицы Google расшарены на `client_email` из JSON.
 - [ ] В облаке задан `GOOGLE_SERVICE_ACCOUNT_JSON` (или эквивалент через env в Docker).
 - [ ] Книга «Возможности оплаты» (`17MoDWn…`) открыта для SA, если нужна вкладка «Варианты оплаты».
 
-**Последнее обновление:** 2026-04-03 (Cloud segfault: обновлён стек в корневом `requirements.txt`; URL прода; метка `PANEL_UI_BUILD` в `app.py`)
+**Последнее обновление:** 2026-03-30 (Cloud: Python **3.11** + `runtime.txt`, **pyarrow 14.x**, порядок numpy→pyarrow→pandas; в DEPLOY зафиксированы **malloc / unsorted double linked list / Aborted**; метка `PANEL_UI_BUILD` в `app.py`)

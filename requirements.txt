@@ -1,12 +1,13 @@
 # Streamlit Community Cloud: exactly ONE requirements.txt at repo root (no second file under webmaster-pipeline-dashboard/).
-# Pin stack for Linux + Python 3.12. uv + older streamlit/pyarrow pairs sometimes segfault right after "Processed dependencies!".
-# If Cloud still segfaults: App Settings → Python 3.12 (not 3.13+), Reboot; see DEPLOY.md § «Oh no» / segfault.
-# Also keep runtime.txt in THIS SAME ROOT so Cloud/uv picks python-3.12.x.
-streamlit==1.41.1
+# uv + Python 3.12+/3.13+ и «тяжёлые» pyarrow на Linux иногда дают сразу после «Processed dependencies!»:
+#   malloc(): unsorted double linked list corrupted / Aborted (падение нативной кучи до UI).
+# Рекомендуемый стек: Python 3.11 (runtime.txt + Settings → General) + pyarrow 14.x + порядок numpy→pyarrow→pandas→streamlit.
+# См. DEPLOY.md § «Oh no» / segfault / malloc.
 numpy==1.26.4
+pyarrow==14.0.2
 pandas==2.2.3
-pyarrow==16.1.0
 protobuf==4.25.3
 google-api-python-client==2.154.0
 google-auth==2.36.0
 google-auth-httplib2==0.2.0
+streamlit==1.41.1
