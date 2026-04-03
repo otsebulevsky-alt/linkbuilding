@@ -171,6 +171,11 @@ def _norm_header(c: Any) -> str:
     return str(c or "").strip().lower()
 
 
+def _column_names_for_header_probe(header_cells: list[Any]) -> list[str]:
+    """Заголовки листа без построения DataFrame по всем строкам данных (для поиска строки шапки)."""
+    return _make_unique_sheet_headers(header_cells)
+
+
 def _header_match_key(label: Any) -> str:
     """Нормализация заголовка для сравнения (пробелы, NFKC, регистр)."""
     s = unicodedata.normalize("NFKC", str(label or "").strip().lower())
@@ -178,7 +183,7 @@ def _header_match_key(label: Any) -> str:
 
 
 def resolve_calc_domain_col(df: pd.DataFrame) -> str | None:
-    if df is None or df.empty or not len(df.columns):
+    if df is None or not len(df.columns):
         return None
     norm_map = {_norm_header(c): c for c in df.columns}
     for key in ("домен", "domain", "site", "url", "website", "сайт"):
@@ -188,7 +193,7 @@ def resolve_calc_domain_col(df: pd.DataFrame) -> str | None:
 
 
 def resolve_calc_price_col(df: pd.DataFrame) -> str | None:
-    if df is None or df.empty:
+    if df is None or not len(df.columns):
         return None
     skip_if = (
         "гео",
@@ -231,20 +236,39 @@ def resolve_calc_price_col(df: pd.DataFrame) -> str | None:
     return None
 
 
-def resolve_calc_responsible_col(df: pd.DataFrame) -> str | None:
-    if df is None or df.empty:
+def resolve_calc_responsible_col(df: pd.DataFrame, explicit_header: str = "") -> str | None:
+    if df is None or not len(df.columns):
+        return None
+    ex = (explicit_header or "").strip()
+    if ex:
+        ex_key = _header_match_key(ex)
+        for c in df.columns:
+            if str(c).strip() == ex or _norm_header(c) == ex.lower():
+                return str(c)
+            if _header_match_key(c) == ex_key:
+                return str(c)
+        for c in df.columns:
+            ck = _header_match_key(c)
+            if ex_key and ex_key in ck:
+                return str(c)
+        for c in df.columns:
+            if ex.lower() in _norm_header(c):
+                return str(c)
         return None
     for c in df.columns:
         cl = _norm_header(c)
         cln = _header_match_key(c)
         if (
             "ответствен" in cl
+            or "ответствен" in cln
             or "responsible" in cln
             or "исполнитель" in cl
+            or "исполнитель" in cln
             or "assignee" in cln
             or cln == "owner"
             or "owner" in cln
             or "менеджер" in cl
+            or "менеджер" in cln
             or "linkbuilder" in cln
         ):
             return str(c)
@@ -279,7 +303,7 @@ def _heuristic_calc_trade_date_col(df: pd.DataFrame) -> str | None:
 
 
 def resolve_calc_trade_date_col(df: pd.DataFrame, explicit_header: str) -> str | None:
-    if df is None or df.empty:
+    if df is None or not len(df.columns):
         return None
     ex = (explicit_header or "").strip()
     if not ex:
@@ -343,30 +367,32 @@ def sheet_rows_to_calculator_dataframe(rows: list[list[Any]], header_row_index: 
     return pd.DataFrame(normalized, columns=header)
 
 
-def trade_calculator_columns_ok(df: pd.DataFrame, col_trade_date: str) -> bool:
+def trade_calculator_columns_ok(
+    df: pd.DataFrame, col_trade_date: str, col_trade_responsible: str = ""
+) -> bool:
     return bool(
         resolve_calc_domain_col(df)
         and resolve_calc_price_col(df)
-        and resolve_calc_responsible_col(df)
+        and resolve_calc_responsible_col(df, col_trade_responsible)
         and resolve_calc_trade_date_col(df, col_trade_date)
     )
 
 
 def discover_calculator_dataframe_from_rows(
-    rows: list[list[Any]], col_trade_date: str
+    rows: list[list[Any]], col_trade_date: str, col_trade_responsible: str = ""
 ) -> tuple[pd.DataFrame, int]:
-    """Подбирает строку шапки в первых 80 строках (лист с пустыми/служебными строками сверху)."""
+    """Подбирает строку шапки по всему прочитанному диапазону (служебные строки сверху)."""
     if not rows:
         return pd.DataFrame(), -1
-    limit = min(80, len(rows))
-    for hi in range(limit):
+    for hi in range(len(rows)):
         if not any(str(c).strip() for c in rows[hi]):
             continue
-        df = sheet_rows_to_calculator_dataframe(rows, hi)
-        if df.empty:
+        names = _column_names_for_header_probe(rows[hi])
+        if not names:
             continue
-        if trade_calculator_columns_ok(df, col_trade_date):
-            return df, hi
+        probe = pd.DataFrame(columns=names)
+        if trade_calculator_columns_ok(probe, col_trade_date, col_trade_responsible):
+            return sheet_rows_to_calculator_dataframe(rows, hi), hi
     return sheet_rows_to_calculator_dataframe(rows, 0), 0
 
 
@@ -375,11 +401,15 @@ def load_calculator_dataframe_for_trade(
     spreadsheet_id: str,
     sheet_title: str,
     col_trade_date: str,
+    col_trade_responsible: str = "",
 ) -> tuple[pd.DataFrame, int]:
     esc = sheet_title.replace("'", "''")
-    rng = f"'{esc}'!A1:ZZ400"
+    # Было ZZ400 — строки ниже не попадали в «торг»; 10000 с запасом под длинные листы.
+    rng = f"'{esc}'!A1:ZZ10000"
     rows = get_spreadsheet_values_rows(sheets_service, spreadsheet_id, rng)
-    return discover_calculator_dataframe_from_rows(rows, col_trade_date)
+    return discover_calculator_dataframe_from_rows(
+        rows, col_trade_date, col_trade_responsible
+    )
 
 
 def resolve_inbox_domain_col(df: pd.DataFrame) -> str | None:
@@ -550,6 +580,7 @@ def run_trade_bargain_round(
         cfg.spreadsheet_calculator_id,
         title_calc,
         cfg.col_trade_date,
+        cfg.col_trade_responsible,
     )
     if df_calc.empty:
         report["errors"].append("Калькулятор: лист пуст, не прочитан API или нет строк под шапкой.")
@@ -558,7 +589,7 @@ def run_trade_bargain_round(
 
     col_dom = resolve_calc_domain_col(df_calc)
     col_price = resolve_calc_price_col(df_calc)
-    col_resp = resolve_calc_responsible_col(df_calc)
+    col_resp = resolve_calc_responsible_col(df_calc, cfg.col_trade_responsible)
     col_date = resolve_calc_trade_date_col(df_calc, cfg.col_trade_date)
     if not col_dom or not col_price or not col_resp or not col_date:
         miss: list[str] = []
@@ -572,10 +603,10 @@ def run_trade_bargain_round(
             miss.append("дата")
         report["errors"].append(
             f"Калькулятор **«{title_calc}»**: не сопоставлены колонки: **{', '.join(miss)}**. "
-            f"Строка шапки (авто): **{report['calc_header_row_1based']}** (поиск в первых 80 строках листа). "
+            f"Строка шапки (авто): **{report['calc_header_row_1based']}** (поиск по всему прочитанному диапазону, до **10000** строк). "
             f"Книга: **SPREADSHEET_CALCULATOR_ID** + **GID_CALCULATOR_TAB_1**. "
             f"Ожидаются заголовки вроде **Domain**, **Цена, $** / **Price** / **Cost**, **Ответственный**, "
-            f"**Комментарий (Денис)** / **Date** — или задайте **COL_TRADE_DATE** в Secrets."
+            f"**Комментарий (Денис)** / **Date** — или задайте **COL_TRADE_DATE** / **COL_TRADE_RESPONSIBLE** в Secrets."
         )
         return report
     report["calc_trade_date_column"] = col_date

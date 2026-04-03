@@ -82,6 +82,8 @@ class AppConfig:
     trade_timezone: str
     # Точный заголовок столбца с датой торга в калькуляторе; пусто — эвристика по «дата» (без колонок «коммент»)
     col_trade_date: str
+    # Точный заголовок столбца ответственного; пусто — эвристика «Ответственный» / Responsible и т.д.
+    col_trade_responsible: str
     # Доля скидки (0.2 = минус 20 %)
     trade_discount_percent: float
     # «Торг»: 0 = дата только сегодня; N>0 = дата от (сегодня − N) до сегодня включительно
@@ -263,6 +265,11 @@ def load_config(secrets: Any | None = None) -> AppConfig:
             secrets,
             "COL_TRADE_DATE",
             _env("COL_TRADE_DATE", "Комментарий (Денис)"),
+        ),
+        col_trade_responsible=_secrets_get(
+            secrets,
+            "COL_TRADE_RESPONSIBLE",
+            _env("COL_TRADE_RESPONSIBLE", ""),
         ),
         trade_discount_percent=max(
             0.0,

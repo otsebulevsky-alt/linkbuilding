@@ -133,6 +133,31 @@ class TestTradeBargain(unittest.TestCase):
         self.assertEqual(resolve_calc_price_col(df), "Цена, $")
         self.assertEqual(resolve_calc_trade_date_col(df, "Комментарий (Денис)"), "Комментарий (Денис)")
 
+    def test_discover_header_after_row_index_80(self) -> None:
+        """Шапка ниже «старого» лимита 80 строк — раньше такие листы не распознавались."""
+        rows: list[list] = [["noise"]] * 90
+        rows.append(
+            ["Domain", "Цена, $", "Ответственный", "Комментарий (Денис)"],
+        )
+        rows.append(["x.com", 80, "Oleg Tsebulevskiy", "2026-04-03"])
+        df, hi = discover_calculator_dataframe_from_rows(rows, "Комментарий (Денис)")
+        self.assertEqual(hi, 90)
+        self.assertEqual(resolve_calc_responsible_col(df), "Ответственный")
+
+    def test_resolve_calc_responsible_explicit_header(self) -> None:
+        df = pd.DataFrame(
+            [
+                {
+                    "Domain": "a.org",
+                    "Цена, $": 10,
+                    "RB": "Oleg",
+                    "Комментарий (Денис)": "2026-04-03",
+                }
+            ]
+        )
+        self.assertIsNone(resolve_calc_responsible_col(df))
+        self.assertEqual(resolve_calc_responsible_col(df, "RB"), "RB")
+
     def test_price_column_not_blocked_by_sold_like_header(self) -> None:
         df = pd.DataFrame(
             [

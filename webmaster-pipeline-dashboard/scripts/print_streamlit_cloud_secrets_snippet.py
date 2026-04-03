@@ -42,6 +42,7 @@ def main() -> None:
     print('LINKBUILDER_FILTER = "Олег"')
     print('LINKBUILDER_ALIASES = "Oleg,oleg"')
     print('TRADE_RESPONSIBLE_NAME = "Oleg Tsebulevskiy"')
+    print('# COL_TRADE_RESPONSIBLE = "Ответственный"  # если авто-поиск колонки не сработал')
     print('ARTICLE_PUBLISH_MAX_SEND = "50"')
     print('# PUBLICATION_CHECK_TIMEOUT_SEC = "25"')
     print('# PUBLICATION_CHECK_MAX_ROWS = "150"')
