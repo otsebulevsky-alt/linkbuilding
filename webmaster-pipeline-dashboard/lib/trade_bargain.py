@@ -12,7 +12,12 @@ import pandas as pd
 
 from lib.config import AppConfig
 from lib.mail_smtp import send_smtp_html
-from lib.sheets_service import a1_all_columns, get_sheet_title_by_gid, get_values_as_dataframe
+from lib.sheets_service import (
+    a1_all_columns,
+    get_sheet_title_by_gid,
+    get_spreadsheet_values_rows,
+    get_values_as_dataframe,
+)
 
 
 def collect_responsible_needles(cfg: AppConfig) -> list[str]:
@@ -176,7 +181,7 @@ def resolve_calc_domain_col(df: pd.DataFrame) -> str | None:
     if df is None or df.empty or not len(df.columns):
         return None
     norm_map = {_norm_header(c): c for c in df.columns}
-    for key in ("домен", "domain", "site"):
+    for key in ("домен", "domain", "site", "url", "website", "сайт"):
         if key in norm_map:
             return str(norm_map[key])
     return str(df.columns[0])
@@ -196,13 +201,26 @@ def resolve_calc_price_col(df: pd.DataFrame) -> str | None:
         "вывод",
         "referr",
     )
-    metric_only = ("traffic", "dr", "ld", "rd ")
+    # Только точные короткие шапки-метрики; подстрока «ld» ломала бы «sold», «golden» и т.д.
+    metric_header_exact = frozenset(
+        {
+            "traffic",
+            "dr",
+            "ld",
+            "rd",
+            "rd/ld",
+            "rd ld",
+        }
+    )
     for c in df.columns:
         cl = _norm_header(c)
         cln = _header_match_key(c)
+        cln_nospace = cln.replace(" ", "")
         if any(x in cl or x in cln for x in skip_if):
             continue
-        if any(x in cln for x in metric_only) and not (
+        if cln_nospace in ("rd/ld", "rdld"):
+            continue
+        if cln in metric_header_exact and not (
             "цена" in cl or "price" in cln or "cost" in cln
         ):
             continue
@@ -295,6 +313,73 @@ def calc_trade_date_is_in_window(
     if d_cell > d_today:
         return False
     return (d_today - d_cell).days <= max_age_days
+
+
+def _make_unique_sheet_headers(raw: list[Any]) -> list[str]:
+    cells = [str(c).strip() if c is not None else "" for c in raw]
+    seen: dict[str, int] = {}
+    out: list[str] = []
+    for i, h in enumerate(cells):
+        base = h if h else f"_c{i}"
+        n = seen.get(base, 0)
+        seen[base] = n + 1
+        out.append(base if n == 0 else f"{base}__{n}")
+    return out
+
+
+def sheet_rows_to_calculator_dataframe(rows: list[list[Any]], header_row_index: int) -> pd.DataFrame:
+    """Строит DataFrame: строка header_row_index — заголовки, ниже — данные."""
+    if header_row_index < 0 or header_row_index >= len(rows):
+        return pd.DataFrame()
+    header = _make_unique_sheet_headers(rows[header_row_index])
+    if not header:
+        return pd.DataFrame()
+    data_rows = rows[header_row_index + 1 :]
+    max_len = len(header)
+    normalized: list[list[Any]] = []
+    for row in data_rows:
+        r = list(row) + [""] * (max_len - len(row))
+        normalized.append(r[:max_len])
+    return pd.DataFrame(normalized, columns=header)
+
+
+def trade_calculator_columns_ok(df: pd.DataFrame, col_trade_date: str) -> bool:
+    return bool(
+        resolve_calc_domain_col(df)
+        and resolve_calc_price_col(df)
+        and resolve_calc_responsible_col(df)
+        and resolve_calc_trade_date_col(df, col_trade_date)
+    )
+
+
+def discover_calculator_dataframe_from_rows(
+    rows: list[list[Any]], col_trade_date: str
+) -> tuple[pd.DataFrame, int]:
+    """Подбирает строку шапки в первых 80 строках (лист с пустыми/служебными строками сверху)."""
+    if not rows:
+        return pd.DataFrame(), -1
+    limit = min(80, len(rows))
+    for hi in range(limit):
+        if not any(str(c).strip() for c in rows[hi]):
+            continue
+        df = sheet_rows_to_calculator_dataframe(rows, hi)
+        if df.empty:
+            continue
+        if trade_calculator_columns_ok(df, col_trade_date):
+            return df, hi
+    return sheet_rows_to_calculator_dataframe(rows, 0), 0
+
+
+def load_calculator_dataframe_for_trade(
+    sheets_service: Any,
+    spreadsheet_id: str,
+    sheet_title: str,
+    col_trade_date: str,
+) -> tuple[pd.DataFrame, int]:
+    esc = sheet_title.replace("'", "''")
+    rng = f"'{esc}'!A1:ZZ400"
+    rows = get_spreadsheet_values_rows(sheets_service, spreadsheet_id, rng)
+    return discover_calculator_dataframe_from_rows(rows, col_trade_date)
 
 
 def resolve_inbox_domain_col(df: pd.DataFrame) -> str | None:
@@ -460,23 +545,37 @@ def run_trade_bargain_round(
         return report
     report["calc_sheet_title"] = title_calc
 
-    df_calc = get_values_as_dataframe(
-        sheets_service, cfg.spreadsheet_calculator_id, a1_all_columns(title_calc)
+    df_calc, hdr_row_idx = load_calculator_dataframe_for_trade(
+        sheets_service,
+        cfg.spreadsheet_calculator_id,
+        title_calc,
+        cfg.col_trade_date,
     )
     if df_calc.empty:
-        report["errors"].append("Калькулятор: лист пуст или не прочитан.")
+        report["errors"].append("Калькулятор: лист пуст, не прочитан API или нет строк под шапкой.")
         return report
+    report["calc_header_row_1based"] = hdr_row_idx + 1 if hdr_row_idx >= 0 else 1
 
     col_dom = resolve_calc_domain_col(df_calc)
     col_price = resolve_calc_price_col(df_calc)
     col_resp = resolve_calc_responsible_col(df_calc)
     col_date = resolve_calc_trade_date_col(df_calc, cfg.col_trade_date)
     if not col_dom or not col_price or not col_resp or not col_date:
+        miss: list[str] = []
+        if not col_dom:
+            miss.append("домен")
+        if not col_price:
+            miss.append("цена")
+        if not col_resp:
+            miss.append("ответственный")
+        if not col_date:
+            miss.append("дата")
         report["errors"].append(
-            "Калькулятор: не удалось сопоставить колонки (домен / цена / ответственный / дата). "
-            "Книга по умолчанию: **SPREADSHEET_CALCULATOR_ID** + **GID_CALCULATOR_TAB_1** (лист вроде **Telecomasia**). "
-            "Проверьте **COL_TRADE_DATE** (по умолчанию **Комментарий (Денис)**) — при несовпадении шапки код пробует эвристику; "
-            "для цены нужны **Цена** / **Price** / **Cost**; для ответственного — **Ответственный** / **Responsible** / **Assignee**."
+            f"Калькулятор **«{title_calc}»**: не сопоставлены колонки: **{', '.join(miss)}**. "
+            f"Строка шапки (авто): **{report['calc_header_row_1based']}** (поиск в первых 80 строках листа). "
+            f"Книга: **SPREADSHEET_CALCULATOR_ID** + **GID_CALCULATOR_TAB_1**. "
+            f"Ожидаются заголовки вроде **Domain**, **Цена, $** / **Price** / **Cost**, **Ответственный**, "
+            f"**Комментарий (Денис)** / **Date** — или задайте **COL_TRADE_DATE** в Secrets."
         )
         return report
     report["calc_trade_date_column"] = col_date

@@ -186,6 +186,22 @@ def get_values_as_dataframe(service, spreadsheet_id: str, range_a1: str) -> pd.D
     return pd.DataFrame(normalized, columns=header)
 
 
+def get_spreadsheet_values_rows(service: Any, spreadsheet_id: str, range_a1: str) -> list[list[Any]]:
+    """Сырые строки листа (majorDimension=ROWS). Пустой список при ошибке API."""
+    try:
+        result = (
+            service.spreadsheets()
+            .values()
+            .get(spreadsheetId=spreadsheet_id, range=range_a1, majorDimension="ROWS")
+            .execute()
+        )
+    except HttpError:
+        return []
+    except Exception:
+        return []
+    return result.get("values") or []
+
+
 def filter_by_linkbuilder(
     df: pd.DataFrame,
     col_linkbuilder: str | None,

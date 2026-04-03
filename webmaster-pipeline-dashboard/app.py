@@ -48,7 +48,7 @@ from lib.sheets_service import (
 )
 
 # Меняйте при каждом релизе UI — в подписи под заголовком видно, что Cloud подтянул новый код.
-PANEL_UI_BUILD = "panel-2026-04-03-trade-calc-columns"
+PANEL_UI_BUILD = "panel-2026-04-03-trade-header-scan"
 
 
 def _safe_trade_filter_stats(fs: object) -> dict[str, int]:
@@ -794,7 +794,8 @@ def main():
         with st.expander("💬 Торг (калькулятор → «Сбор с ответов» → IMAP-тред → SMTP)", expanded=True):
             st.caption(
                 "Строки **калькулятора** (лист **"
-                f"{tr.get('calc_sheet_title') or '…'}** · `GID_CALCULATOR_TAB_1`), колонка **даты торга** "
+                f"{tr.get('calc_sheet_title') or '…'}** · `GID_CALCULATOR_TAB_1`"
+                f" · шапка авто: строка **{tr.get('calc_header_row_1based', '—')}**), колонка **даты торга** "
                 f"**{tr.get('calc_trade_date_column') or '…'}** — дата в окне: "
                 f"**{tr.get('trade_date_max_age_days', 0)}** дн. назад … сегодня (**TRADE_DATE_MAX_AGE_DAYS**; **0** = только сегодня), "
                 f"сегодня для расчёта: **{tr.get('today', '…')}** (**{cfg.trade_timezone}**). "
