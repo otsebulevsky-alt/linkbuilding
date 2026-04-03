@@ -29,6 +29,8 @@ from lib.mail_smtp import send_smtp_html
 from lib.article_publish_batch import run_article_publish_batch
 from lib.publication_check_batch import run_publication_check_batch
 from lib.trade_bargain import run_trade_bargain_round
+from lib.inbox_sheet_cleanup import remove_inbox_noise_rows
+from lib.inbox_sheet_dedupe import dedupe_and_highlight_inbox_sheet
 from lib.webmaster_inbox_sync import sync_unseen_webmasters_to_inbox_sheet
 from lib.sheets_service import (
     a1_all_columns,
@@ -416,6 +418,10 @@ def main():
 
     if "imap_sync_report" not in st.session_state:
         st.session_state.imap_sync_report = None
+    if "inbox_cleanup_report" not in st.session_state:
+        st.session_state.inbox_cleanup_report = None
+    if "inbox_dedupe_report" not in st.session_state:
+        st.session_state.inbox_dedupe_report = None
     if "trade_bargain_report" not in st.session_state:
         st.session_state.trade_bargain_report = None
     if "article_publish_report" not in st.session_state:
@@ -440,6 +446,9 @@ def main():
                     "payment_reference_empty": False,
                     "payment_reply_sent": 0,
                     "payment_reply_errors": [],
+                    "sync_run_date_iso": "",
+                    "sync_date_timezone": "",
+                    "budget_inquiry_highlighted": 0,
                     "errors": [
                         "Нет доступа к почте: в Streamlit **Settings → Secrets** задайте "
                         "**GMAIL_IMAP_USER** = `o.tsebulevsky@rantsports.com` и **GMAIL_IMAP_APP_PASSWORD** "
@@ -469,6 +478,7 @@ def main():
                     smtp_port=sm_port,
                     smtp_user=sm_user,
                     smtp_password=sm_pass,
+                    sync_date_timezone=cfg.trade_timezone,
                 )
             rep = st.session_state.imap_sync_report
             if rep.get("errors") and rep.get("rows_appended", 0) == 0:
@@ -602,7 +612,8 @@ def main():
         with st.expander("📬 Синхронизация ответов вебмастеров → таблица «Сбор с ответов»", expanded=True):
             st.caption(
                 "Непрочитанные (UNSEEN) из **IMAP** разбираются на сервере: домен из темы (`… for site.com`), "
-                "дополнительные сайты из ссылок в теле, дата письма, черновик **цены** из текста, **Почта** отправителя. "
+                "дополнительные сайты из ссылок в теле, в колонку **дата** пишется **дата нажатия «Прочитать почту»** "
+                f"(часовой пояс **{cfg.trade_timezone}**), черновик **цены** из текста письма, **Почта** отправителя. "
                 "По одной строке на домен. Колонка **«Цена после торг»** не заполняется (ручной ввод). "
                 "Колонка **F** — черновик ответа про **оплату**: сверка с книгой «Возможности оплаты»; "
                 "если в письме **нет** вариантов оплаты или они **не входят** в ваш справочник — подставляется фраза про USDT/PayPal "
@@ -612,7 +623,12 @@ def main():
                 "Чтобы **только таблица** без отправки — в Secrets: **`IMAP_AUTO_REPLY_PAYMENT_FOLLOWUP = false`**. "
                 "Темы вида **«… for site.com»** и **«… your website site.com»** распознаются; UNSEEN обрабатываются **сначала более новые** "
                 "(можно отключить: `IMAP_SYNC_NEWEST_FIRST = false`). "
-                "Письмо помечается прочитанным, если добавлена хотя бы одна строка."
+                "Письмо помечается прочитанным, если добавлена хотя бы одна строка **или** оно отфильтровано как не ответ вебмастера: "
+                "**только наш шаблон** про USDT/PayPal в теле (как исходящее уточнение), **отказ доставки** (mailer-daemon, «Address not found», «message wasn't delivered»), "
+                "**только платформенные хосты** в теме/ссылках (github.com, slack.com, hunter.io, YouTrack, биржи ссылок — см. **lib/mail_parse.py**, `_NON_WEBMASTER_HOST_ROOTS`) "
+                "или **From** совпадает с ящиком IMAP — в таблицу не пишется, **SMTP не шлётся**; такие UNSEEN помечаются прочитанными. "
+                "Вопрос про **бюджет** («What is your budget», «какой бюджет» и т.п.) — **без** автоответа и **без** текста в F; "
+                "добавленные строки **жёлтые** (ответ вручную)."
             )
             sid = cfg.spreadsheet_inbox_log_id
             st.markdown(
@@ -630,13 +646,19 @@ def main():
                 if ar_on
                 else "Автоответ SMTP: **выключен** в Secrets (`IMAP_AUTO_REPLY_PAYMENT_FOLLOWUP = false`) — только строки в таблице."
             )
-            m1, m2, m3, m4, m5, m6 = st.columns(6)
+            m1, m2, m3, m4, m5, m6, m7 = st.columns(7)
             m1.metric("UNSEEN в ящике", ut)
             m2.metric("Писем обработано", rep.get("emails_seen", 0))
             m3.metric("Строк в таблицу", rep.get("rows_appended", 0))
             m4.metric("Помечено прочитанными", rep.get("emails_marked_read", 0))
             m5.metric("Черновик оплаты (стр.)", rep.get("payment_followup_rows", 0))
             m6.metric("Отправлено SMTP (оплата)", rep.get("payment_reply_sent", 0))
+            m7.metric("Жёлтых (бюджет)", rep.get("budget_inquiry_highlighted", 0))
+            if rep.get("sync_run_date_iso"):
+                st.caption(
+                    f"В колонку **дата** для строк этого запуска: **{rep.get('sync_run_date_iso')}** "
+                    f"({rep.get('sync_date_timezone', '—')})."
+                )
             for pre in rep.get("payment_reply_errors") or []:
                 st.warning(pre)
             if rep.get("payment_options_enabled") and rep.get("payment_reference_empty"):
@@ -648,12 +670,93 @@ def main():
                 st.error(err)
             skipped = rep.get("skipped") or []
             if skipped:
-                st.warning("Пропущены (не извлечён домен из темы/ссылок):")
+                st.warning("Пропуски (строка в таблицу не добавлялась; см. колонку **reason**):")
                 st.dataframe(pd.DataFrame(skipped), use_container_width=True, height=min(220, 60 + 28 * len(skipped)))
             if not rep.get("errors") and rep.get("emails_seen", 0) == 0:
                 st.info("Нет непрочитанных писем в ящике.")
             if st.button("Скрыть отчёт", key="imap_sync_clear"):
                 st.session_state.imap_sync_report = None
+                st.rerun()
+
+    with st.expander("Убрать из «Сбор с ответов» строки, которые не ответы вебмастера", expanded=False):
+        st.caption(
+            "Удаляет **строки данных** (шапка не трогается), если в **«Почте»** только шаблон оплаты / только email / отказ доставки, "
+            "или в **«Домене»** сервис вроде github.com, slack.com, hunter.io (список в **lib/mail_parse.py**)."
+        )
+        if st.button("Удалить такие строки из листа", key="inbox_noise_cleanup"):
+            st.session_state.inbox_cleanup_report = remove_inbox_noise_rows(
+                sheets_service=svc,
+                spreadsheet_id=cfg.spreadsheet_inbox_log_id,
+                sheet_gid=cfg.gid_inbox_log,
+            )
+            cr = st.session_state.inbox_cleanup_report
+            if cr.get("errors"):
+                try:
+                    st.toast("Очистка: ошибка (см. блок ниже)", icon="⚠️")
+                except Exception:
+                    pass
+            else:
+                try:
+                    st.toast(f"Удалено строк: {cr.get('rows_deleted', 0)}", icon="✅")
+                except Exception:
+                    pass
+            st.rerun()
+
+    if st.session_state.inbox_cleanup_report is not None:
+        cr = st.session_state.inbox_cleanup_report
+        with st.expander("🧹 Очистка «Сбор с ответов» от строк-шума", expanded=bool(cr.get("errors"))):
+            st.write(
+                f"Лист: **{cr.get('sheet_title') or '—'}** · удалено строк: **{cr.get('rows_deleted', 0)}** "
+                f"(найдено к удалению: {cr.get('candidates', 0)})."
+            )
+            for err in cr.get("errors") or []:
+                st.error(err)
+            if st.button("Скрыть отчёт очистки", key="inbox_cleanup_clear"):
+                st.session_state.inbox_cleanup_report = None
+                st.rerun()
+
+    with st.expander("Дедуп строк «Сбор с ответов» и подсветка цен по домену", expanded=False):
+        st.caption(
+            "**1)** Полностью одинаковые строки (все столбцы) — удаляются лишние, остаётся верхняя. "
+            "**2)** Для одного и того же **домена** при двух и более строках с **разными числовыми ценами** "
+            "в колонке **«цена»** (не «после торг»): меньшая — **зелёный** фон строки, большая — **красный**, "
+            "промежуточные — без цвета. Сначала сбрасывается фон всех строк данных (белый), затем красятся нужные. "
+            "**Внимание:** жёлтая подсветка строк «вопрос про бюджет» после **«Прочитать почту»** этим шагом **сотрётся**."
+        )
+        if st.button("Выполнить дедуп и подсветку", key="inbox_dedupe_highlight"):
+            st.session_state.inbox_dedupe_report = dedupe_and_highlight_inbox_sheet(
+                sheets_service=svc,
+                spreadsheet_id=cfg.spreadsheet_inbox_log_id,
+                sheet_gid=cfg.gid_inbox_log,
+            )
+            dr = st.session_state.inbox_dedupe_report
+            if dr.get("errors"):
+                try:
+                    st.toast("Дедуп: ошибка (см. блок ниже)", icon="⚠️")
+                except Exception:
+                    pass
+            else:
+                try:
+                    st.toast(
+                        f"Дублей удалено: {dr.get('duplicates_removed', 0)} · "
+                        f"строк с подсветкой: {dr.get('rows_formatted', 0)}",
+                        icon="✅",
+                    )
+                except Exception:
+                    pass
+            st.rerun()
+
+    if st.session_state.inbox_dedupe_report is not None:
+        dr = st.session_state.inbox_dedupe_report
+        with st.expander("📊 Дедуп и подсветка «Сбор с ответов»", expanded=bool(dr.get("errors"))):
+            st.write(
+                f"Лист: **{dr.get('sheet_title') or '—'}** · удалено полных дублей: **{dr.get('duplicates_removed', 0)}** · "
+                f"строк с зелёным/красным фоном: **{dr.get('rows_formatted', 0)}**."
+            )
+            for err in dr.get("errors") or []:
+                st.error(err)
+            if st.button("Скрыть отчёт дедупа", key="inbox_dedupe_clear"):
+                st.session_state.inbox_dedupe_report = None
                 st.rerun()
 
     if st.session_state.trade_bargain_report is not None:

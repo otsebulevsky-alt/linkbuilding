@@ -61,6 +61,28 @@ def get_sheet_title_by_gid(service, spreadsheet_id: str, gid: int) -> str | None
     return None
 
 
+def get_sheet_id_by_gid(service, spreadsheet_id: str, gid: int) -> int | None:
+    """Numeric sheetId для batchUpdate (совпадает с #gid= в URL)."""
+    if gid < 0:
+        return None
+    try:
+        meta = service.spreadsheets().get(spreadsheetId=spreadsheet_id, fields="sheets.properties").execute()
+        sheets = meta.get("sheets", [])
+        for sh in sheets:
+            props = sh.get("properties") or {}
+            if props.get("sheetId") == gid:
+                sid = props.get("sheetId")
+                return int(sid) if sid is not None else None
+        if gid == 0 and sheets:
+            sid0 = (sheets[0].get("properties") or {}).get("sheetId")
+            return int(sid0) if sid0 is not None else None
+    except HttpError:
+        return None
+    except Exception:
+        return None
+    return None
+
+
 def a1_all_columns(sheet_title: str) -> str:
     escaped = sheet_title.replace("'", "''")
     return f"'{escaped}'!A:ZZ"
@@ -196,11 +218,28 @@ def count_by_status(df: pd.DataFrame, col_status: str) -> dict[str, int]:
     return vc.value_counts().to_dict()
 
 
-def append_row(service, spreadsheet_id: str, sheet_title: str, row_values: list[Any]) -> None:
+def parse_append_updated_range_start_row_0based(updated_range: str | None) -> int | None:
+    """Из ответа values.append `updates.updatedRange` («Лист»!A12:F12) → 0-based индекс первой строки."""
+    if not updated_range:
+        return None
+    part = updated_range.split("!", 1)[-1]
+    left = part.split(":")[0].strip()
+    digits = "".join(ch for ch in left if ch.isdigit())
+    if not digits:
+        return None
+    return int(digits) - 1
+
+
+def append_row(
+    service, spreadsheet_id: str, sheet_title: str, row_values: list[Any]
+) -> str | None:
+    """
+    Добавляет строку; возвращает updates.updatedRange из ответа API (для подсветки строки) или None.
+    """
     escaped = sheet_title.replace("'", "''")
     range_a1 = f"'{escaped}'!A1"
     body = {"values": [row_values]}
-    (
+    resp = (
         service.spreadsheets()
         .values()
         .append(
@@ -212,3 +251,46 @@ def append_row(service, spreadsheet_id: str, sheet_title: str, row_values: list[
         )
         .execute()
     )
+    return (resp.get("updates") or {}).get("updatedRange")
+
+
+def batch_format_rows_background(
+    service: Any,
+    spreadsheet_id: str,
+    sheet_id: int,
+    row_indices_0based: list[int],
+    end_column_exclusive: int,
+    color: dict[str, float],
+    *,
+    chunk: int = 200,
+) -> None:
+    """Заливка фона для целых строк (0-based индекс строки листа; 0 = шапка)."""
+    unique = sorted({r for r in row_indices_0based if r >= 1})
+    if not unique:
+        return
+    requests: list[dict[str, Any]] = []
+    for r in unique:
+        requests.append(
+            {
+                "repeatCell": {
+                    "range": {
+                        "sheetId": sheet_id,
+                        "startRowIndex": r,
+                        "endRowIndex": r + 1,
+                        "startColumnIndex": 0,
+                        "endColumnIndex": max(1, end_column_exclusive),
+                    },
+                    "cell": {"userEnteredFormat": {"backgroundColor": color}},
+                    "fields": "userEnteredFormat.backgroundColor",
+                }
+            }
+        )
+    for i in range(0, len(requests), chunk):
+        (
+            service.spreadsheets()
+            .batchUpdate(
+                spreadsheetId=spreadsheet_id,
+                body={"requests": requests[i : i + chunk]},
+            )
+            .execute()
+        )

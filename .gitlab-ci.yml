@@ -9,15 +9,21 @@ stages:
   - deploy
 
 # Push current branch to GitHub (Streamlit Community Cloud reads only GitHub).
+# Before push: install deps + run webmaster-pipeline-dashboard unit tests (stdlib unittest).
+# One job = one runner slot (same constraint as alpine/git mirror-only).
 # Set CI/CD variable GITHUB_TOKEN: classic PAT with "repo" scope (GitHub account that owns github.com/otsebulevsky-alt/linkbuilding).
 mirror_github_streamlit:
   stage: deploy
-  image: alpine/git:latest
+  image: python:3.12-slim-bookworm
   variables:
     GIT_DEPTH: "0"
   rules:
     - if: $GITHUB_TOKEN
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq git
+    - pip install --no-cache-dir -r requirements.txt
   script:
+    - cd webmaster-pipeline-dashboard && python -m unittest discover -s tests -p "test_*.py" -q && cd ..
     - git config user.email "o.tsebulevsky@rantsports.com"
     - git config user.name "Oleg Tsebulevsky"
     - git fetch --unshallow 2>/dev/null || true

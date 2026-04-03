@@ -50,6 +50,49 @@ DRAFT_EN = (
 )
 
 
+def normalize_compact_for_template(text: str) -> str:
+    """Lowercase + collapse whitespace for stable substring checks."""
+    t = (text or "").lower()
+    t = re.sub(r"[\u200b\ufeff\xa0]", " ", t)
+    t = re.sub(r"\s+", " ", t).strip()
+    return t
+
+
+# After removing our payment follow-up draft from the body, these patterns suggest a real webmaster reply.
+_WEBMASTER_BODY_SUBSTANCE_RE = re.compile(
+    r"£\s*[\d,]+|€\s*[\d,]+|\$\s*[\d,]+|"
+    r"\b(?:guest\s*post|accept\s+(?:guest|posts?)|we\s+(?:do\s+)?accept|"
+    r"happy\s+to|rate\s+card|per\s+article|invoice|vat\b|guidelines|"
+    r"turnaround|editorial|publish|placement|fee\s+is|cost\s+is|quoted|quote|"
+    r"банковск|стоимост|\bцена\b|руб\.?|гостев|размещен|условия|сроки)",
+    re.I,
+)
+
+
+def is_our_payment_followup_template_only(*, body: str) -> bool:
+    """
+    True when the message body is essentially only our standard USDT/PayPal follow-up (DRAFT_EN / DRAFT_RU),
+    plus a short signature or footer. Such messages are outbound-style noise and must not be logged to
+    «Сбор с ответов». Real replies that quote our draft but add rates or guest-post terms return False.
+    """
+    blob = normalize_compact_for_template(body)
+    if not blob:
+        return False
+    en = normalize_compact_for_template(DRAFT_EN)
+    ru = normalize_compact_for_template(DRAFT_RU)
+    if en not in blob and ru not in blob:
+        return False
+    rest = blob
+    while en and en in rest:
+        rest = rest.replace(en, " ")
+    while ru and ru in rest:
+        rest = rest.replace(ru, " ")
+    rest = normalize_compact_for_template(rest)
+    if _WEBMASTER_BODY_SUBSTANCE_RE.search(rest):
+        return False
+    return len(rest) <= 220
+
+
 def canonicals_in_text(text: str) -> set[str]:
     if not text or not str(text).strip():
         return set()

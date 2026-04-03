@@ -40,7 +40,7 @@ class TestTradeBargain(unittest.TestCase):
         self.assertFalse(cell_matches_responsible("Someone Else", needles))
 
     def test_find_email_sorts_by_ymd_from_mail_sync(self) -> None:
-        """Даты из IMAP-синка в «Сбор с ответов» — ГГГГ-ММ-ДД; берём самую свежую почту."""
+        """Колонка «дата» в «Сбор с ответов» — ГГГГ-ММ-ДД (дата синка); берём самую свежую почту по домену."""
         df = pd.DataFrame(
             [
                 {"Домен": "a.com", "дата": "2026-04-01", "Почта": "old@x.com"},

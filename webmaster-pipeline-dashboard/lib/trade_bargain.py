@@ -189,6 +189,23 @@ def resolve_inbox_date_col(df: pd.DataFrame) -> str | None:
     return None
 
 
+def resolve_inbox_price_col(df: pd.DataFrame) -> str | None:
+    """Колонка «цена» в «Сбор с ответов»; не путать с «Цена после торг»."""
+    if df is None or df.empty:
+        return None
+    for c in df.columns:
+        cl = _norm_header(c)
+        if "после" in cl or "торг" in cl:
+            continue
+        if "цена" in cl and "после" not in cl:
+            return str(c)
+        if cl in ("price", "cost"):
+            return str(c)
+    if len(df.columns) > 2:
+        return str(df.columns[2])
+    return None
+
+
 def _parse_inbox_date_sort_key(raw: str) -> tuple:
     s = (raw or "").strip()
     if not s:
