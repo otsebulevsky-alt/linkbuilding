@@ -2,6 +2,8 @@
 
 Репозиторий кода: **GitLab** (`internal/seo/linkbuilding`). [Streamlit Community Cloud](https://streamlit.io/cloud) подключается **только к GitHub** — для него нужен зеркальный репозиторий на GitHub.
 
+**Прод-панель (HACK-382):** [https://webmaster-pipeline-dashboard.streamlit.app/](https://webmaster-pipeline-dashboard.streamlit.app/)
+
 ## Учётные записи Rantsports (канон)
 
 | Что | Правило |
@@ -142,7 +144,7 @@ Streamlit читает **GitHub**, вы пушите в **GitLab**. После `
 | Репозиторий на **GitHub** (куда зеркалит CI) | [https://github.com/otsebulevsky-alt/linkbuilding](https://github.com/otsebulevsky-alt/linkbuilding) |
 | Ветка на GitHub (проверить свежий коммит) | [https://github.com/otsebulevsky-alt/linkbuilding/tree/feature/seolb-164-webmaster-prospecting-oleg](https://github.com/otsebulevsky-alt/linkbuilding/tree/feature/seolb-164-webmaster-prospecting-oleg) |
 | Создать **Personal Access Token** (classic, scope **repo**) для `GITHUB_TOKEN` | [https://github.com/settings/tokens](https://github.com/settings/tokens) → **Generate new token (classic)** |
-| Панель **Streamlit Community Cloud** | [https://share.streamlit.io/](https://share.streamlit.io/) → своё приложение → **⋮** → **Reboot app** |
+| Панель **Streamlit Community Cloud** (прод) | [https://webmaster-pipeline-dashboard.streamlit.app/](https://webmaster-pipeline-dashboard.streamlit.app/) · управление: [https://share.streamlit.io/](https://share.streamlit.io/) → **⋮** → **Reboot app** |
 | Создать **Merge Request** из ветки feature (после push) | [https://rantsports.gitlab.yandexcloud.net/ai-first-workspace/internal/seo/linkbuilding/-/merge_requests/new?merge_request%5Bsource_branch%5D=feature%2Fseolb-164-webmaster-prospecting-oleg](https://rantsports.gitlab.yandexcloud.net/ai-first-workspace/internal/seo/linkbuilding/-/merge_requests/new?merge_request%5Bsource_branch%5D=feature%2Fseolb-164-webmaster-prospecting-oleg) |
 
 **Краткий порядок:** push в GitLab → открыть **Pipelines** → убедиться, что job **`mirror_github_streamlit`** **зелёный** → открыть ветку на **GitHub** и проверить коммит → **Reboot** в Streamlit.
@@ -289,4 +291,4 @@ git push -u github feature/seolb-164-webmaster-prospecting-oleg
 - [ ] В облаке задан `GOOGLE_SERVICE_ACCOUNT_JSON` (или эквивалент через env в Docker).
 - [ ] Книга «Возможности оплаты» (`17MoDWn…`) открыта для SA, если нужна вкладка «Варианты оплаты».
 
-**Последнее обновление:** 2026-03-30 (проверка публикаций: I+J + EEAT; метка `PANEL_UI_BUILD` в `app.py`)
+**Последнее обновление:** 2026-03-30 (URL прода: webmaster-pipeline-dashboard.streamlit.app; проверка публикаций: I+J + EEAT; метка `PANEL_UI_BUILD` в `app.py`)
