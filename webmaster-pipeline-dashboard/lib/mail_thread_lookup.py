@@ -25,12 +25,15 @@ def _decode_mime(s: str | None) -> str:
 
 
 def _header_peer_match(msg: Message, peer_email: str) -> bool:
-    """Письмо между нами и вебмастером (peer в From, Reply-To или To/Cc)."""
+    """Письмо между нами и вебмастером (peer в From, Sender, Reply-To или To/Cc)."""
     pl = (peer_email or "").strip().lower()
     if not pl:
         return False
     _, f = parseaddr(_decode_mime(msg.get("From")))
     if f.strip().lower() == pl:
+        return True
+    _, snd = parseaddr(_decode_mime(msg.get("Sender")))
+    if snd.strip().lower() == pl:
         return True
     _, rpto = parseaddr(_decode_mime(msg.get("Reply-To")))
     if rpto.strip().lower() == pl:
@@ -184,33 +187,36 @@ def _parse_uid_list_static(data) -> list[int]:
     return [int(x) for x in str(chunk).split() if x.isdigit()]
 
 
-def _collect_search_uids(
-    imap: imaplib.IMAP4_SSL, peer: str, dom: str, _parse_uid_list
-) -> tuple[list[int], bool]:
-    strict_queries = (
+def _iter_search_uid_batches(
+    imap: imaplib.IMAP4_SSL,
+    peer: str,
+    dom: str,
+    _parse_uid_list,
+):
+    """Несколько запросов подряд: не останавливаться на первом непустом UID-листе, если письмо не подошло.
+
+    Иначе Gmail по `(peer+домен)` может вернуть 1 ложное совпадение — и широкий `from|to:peer` даже не пробуется.
+    """
+    for raw_q in (
         f"(from:{peer} OR to:{peer}) {dom}",
         f"(from:{peer} OR to:{peer}) subject:{dom}",
-    )
-    uids: list[int] = []
-    domain_required_in_headers = False
-    for raw_q in strict_queries:
+    ):
         uids = _gmail_raw_search_uids(imap, raw_q, _parse_uid_list)
         if uids:
-            return uids, domain_required_in_headers
+            yield uids, False
 
     uids = _gmail_raw_search_uids(imap, f"from:{peer} OR to:{peer}", _parse_uid_list)
-    domain_required_in_headers = bool(uids)
     if uids:
-        return uids, domain_required_in_headers
+        yield uids, True
 
     try:
         typ, data = imap.search(None, "TEXT", dom)
         if typ == "OK":
             uids = _parse_uid_list(data)
-            domain_required_in_headers = True
+            if uids:
+                yield uids, True
     except imaplib.IMAP4.error:
-        uids = []
-    return uids, domain_required_in_headers
+        pass
 
 
 def _scan_uids_for_reply_context(
@@ -250,6 +256,11 @@ def _scan_uids_for_reply_context(
         subj = _decode_mime(msg.get("Subject"))
         mid_raw = _decode_mime(msg.get("Message-ID")).strip()
         if not mid_raw:
+            irt = _decode_mime(msg.get("In-Reply-To")).strip()
+            if irt:
+                first = irt.replace("\n", " ").split()[0]
+                mid_raw = first
+        if not mid_raw:
             continue
         mid_n = _normalize_msg_id(mid_raw)
         refs = _build_references(msg)
@@ -286,7 +297,6 @@ def find_reply_context_for_peer(
     except OSError:
         return None, "imap_connect_failed"
 
-    last_hint = "imap_unknown"
     try:
         with imap_cm as imap:
             try:
@@ -307,22 +317,33 @@ def find_reply_context_for_peer(
                     extra_select_errors.append(f"select_failed:{mbox}")
                     continue
 
-                uids, domain_req = _collect_search_uids(imap, peer, dom, _parse_uid_list_static)
-                if not uids:
-                    meaningful = f"imap_no_uids:{mbox}"
-                    continue
+                batch_sizes: list[int] = []
+                ctx_found: dict[str, str] | None = None
+                for uids, domain_req in _iter_search_uid_batches(
+                    imap, peer, dom, _parse_uid_list_static
+                ):
+                    if not uids:
+                        continue
+                    batch_sizes.append(len(uids))
+                    ctx_found = _scan_uids_for_reply_context(
+                        imap,
+                        uids,
+                        peer=peer,
+                        dom=dom,
+                        domain_required_in_headers=domain_req,
+                        max_uids_to_scan=max_uids_to_scan,
+                    )
+                    if ctx_found:
+                        return ctx_found, ""
 
-                ctx = _scan_uids_for_reply_context(
-                    imap,
-                    uids,
-                    peer=peer,
-                    dom=dom,
-                    domain_required_in_headers=domain_req,
-                    max_uids_to_scan=max_uids_to_scan,
-                )
-                if ctx:
-                    return ctx, ""
-                meaningful = f"imap_no_matching_thread:{mbox} uids={len(uids)}"
+                if not batch_sizes:
+                    meaningful = f"imap_no_uids:{mbox}"
+                else:
+                    meaningful = (
+                        f"imap_no_matching_thread:{mbox} "
+                        f"search_uid_counts={'+'.join(str(x) for x in batch_sizes)}"
+                    )
+                continue
 
             if meaningful and extra_select_errors:
                 return None, meaningful + " | " + "; ".join(extra_select_errors)
