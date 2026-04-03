@@ -313,9 +313,11 @@ def find_reply_context_for_peer(
             meaningful: str | None = None
             extra_select_errors: list[str] = []
 
+            # Только SEARCH/FETCH — пишем по SMTP, не через IMAP. Gmail помечает [Gmail]/Sent Mail и др. как
+            # READ-ONLY; imap.select(..., readonly=False) тогда бросает IMAP4.readonly → ложный «select_error».
             for mbox in _mailboxes_for_thread_search(imap_mailbox, imap):
                 try:
-                    typ, _ = imap.select(mbox)
+                    typ, _ = imap.select(mbox, readonly=True)
                 except Exception:
                     extra_select_errors.append(f"select_error:{mbox}")
                     continue
