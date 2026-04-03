@@ -40,6 +40,7 @@ from lib.sheets_service import (
     filter_by_linkbuilder,
     get_sheet_title_by_gid,
     get_values_as_dataframe,
+    resolve_calculator_sheet_title,
     resolve_article_column,
     resolve_cost_column,
     resolve_donor_column,
@@ -48,7 +49,7 @@ from lib.sheets_service import (
 )
 
 # Меняйте при каждом релизе UI — в подписи под заголовком видно, что Cloud подтянул новый код.
-PANEL_UI_BUILD = "panel-2026-03-30-trade-responsible-header-fix"
+PANEL_UI_BUILD = "panel-2026-03-30-calc-sheet-resolve-hints"
 
 
 def _safe_trade_filter_stats(fs: object) -> dict[str, int]:
@@ -1108,7 +1109,11 @@ def main():
 
     with tab_calc:
         st.subheader("Калькулятор — снимок листов")
-        t_calc1 = get_sheet_title_by_gid(svc, cfg.spreadsheet_calculator_id, cfg.gid_calculator_tab_primary)
+        t_calc1, err_c1 = resolve_calculator_sheet_title(
+            svc, cfg.spreadsheet_calculator_id, cfg.gid_calculator_tab_primary
+        )
+        if err_c1 and not t_calc1:
+            st.error(err_c1)
         if t_calc1:
             df_c1 = get_values_as_dataframe(svc, cfg.spreadsheet_calculator_id, a1_all_columns(t_calc1))
             st.markdown(f"**Вкладка 1:** `{t_calc1}`")

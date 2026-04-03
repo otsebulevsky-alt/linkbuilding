@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+import unicodedata
 from typing import Any
 
 import pandas as pd
@@ -39,6 +41,34 @@ def build_sheets_service(service_account_info: dict | None):
     return build("sheets", "v4", credentials=creds, cache_discovery=False)
 
 
+def _int_sheet_id(val: Any) -> int | None:
+    """sheetId из API — int; на всякий случай приводим из str/float."""
+    if val is None:
+        return None
+    try:
+        return int(val)
+    except (TypeError, ValueError):
+        try:
+            return int(float(val))
+        except (TypeError, ValueError):
+            return None
+
+
+def _norm_calc_tab_title(title: str) -> str:
+    s = unicodedata.normalize("NFKC", (title or "").strip().lower())
+    return re.sub(r"\s+", "", s)
+
+
+# Имена вкладки калькулятора (после «Создать копию» gid меняется — ищем по названию).
+_CALC_TAB_TITLE_ALIASES = frozenset(
+    {
+        "telecomasia",
+        "telecomesia",
+        "телекомазия",
+    }
+)
+
+
 def get_sheet_title_by_gid(service, spreadsheet_id: str, gid: int) -> str | None:
     """Return sheet title for numeric sheetId (same as gid in URL). gid=0 — первая вкладка книги."""
     if gid < 0:
@@ -46,19 +76,98 @@ def get_sheet_title_by_gid(service, spreadsheet_id: str, gid: int) -> str | None
     try:
         meta = service.spreadsheets().get(spreadsheetId=spreadsheet_id, fields="sheets.properties").execute()
         sheets = meta.get("sheets", [])
+        want = int(gid)
         for sh in sheets:
             props = sh.get("properties") or {}
-            if props.get("sheetId") == gid:
-                return props.get("title")
-        if gid == 0 and sheets:
+            sid = _int_sheet_id(props.get("sheetId"))
+            if sid is not None and sid == want:
+                t = props.get("title")
+                return str(t) if t is not None else None
+        if want == 0 and sheets:
             props0 = sheets[0].get("properties") or {}
-            return props0.get("title")
+            t0 = props0.get("title")
+            return str(t0) if t0 is not None else None
     except HttpError:
         return None
     except Exception:
         # SSL, timeouts, google.auth refresh errors — do not crash Streamlit UI
         return None
     return None
+
+
+def resolve_calculator_sheet_title(
+    service: Any,
+    spreadsheet_id: str,
+    gid: int,
+) -> tuple[str | None, str]:
+    """(title, err_html). err пустой при успехе. Отличает 403/404 от «gid не в этой книге»; fallback по имени вкладки."""
+    if not spreadsheet_id or not str(spreadsheet_id).strip():
+        return None, "Не задан **SPREADSHEET_CALCULATOR_ID** (книга калькулятора)."
+    if gid < 0:
+        return None, "Некорректный **GID_CALCULATOR_TAB_1**."
+    try:
+        meta = service.spreadsheets().get(spreadsheetId=spreadsheet_id, fields="sheets.properties").execute()
+    except HttpError as e:
+        status = getattr(getattr(e, "resp", None), "status", None)
+        if status == 403:
+            return None, (
+                "Нет доступа к книге калькулятора (**403**). Откройте таблицу в Google Sheets → **Настроить доступ** "
+                "и добавьте **client_email** из **GOOGLE_SERVICE_ACCOUNT_JSON** (роль **Читатель** или выше). "
+                "Проверьте, что **SPREADSHEET_CALCULATOR_ID** в Secrets совпадает с ID в URL книги."
+            )
+        if status == 404:
+            return None, (
+                "Книга не найдена (**404**). Проверьте **SPREADSHEET_CALCULATOR_ID** в Secrets — ID из URL "
+                "`/spreadsheets/d/<ID>/edit`."
+            )
+        return None, f"Google Sheets API: HTTP **{status}** при чтении книги калькулятора."
+    except Exception:
+        return None, "Не удалось прочитать метаданные книги (сеть / SSL / таймаут). Повторите позже."
+
+    sheets = meta.get("sheets") or []
+    if not sheets:
+        return None, "В книге калькулятора нет ни одной вкладки."
+
+    want = int(gid)
+    for sh in sheets:
+        props = sh.get("properties") or {}
+        sid = _int_sheet_id(props.get("sheetId"))
+        if sid is not None and sid == want:
+            t = props.get("title")
+            return (str(t) if t is not None else None) or None, ""
+
+    if want == 0:
+        props0 = (sheets[0].get("properties") or {})
+        t0 = props0.get("title")
+        return (str(t0) if t0 is not None else None) or None, ""
+
+    matches: list[str] = []
+    for sh in sheets:
+        props = sh.get("properties") or {}
+        title = str(props.get("title") or "")
+        nt = _norm_calc_tab_title(title)
+        if nt in _CALC_TAB_TITLE_ALIASES or ("telecom" in nt and "asia" in nt):
+            matches.append(title)
+
+    if len(matches) == 1:
+        return matches[0], ""
+
+    titles_preview = ", ".join(
+        str((s.get("properties") or {}).get("title") or "?") for s in sheets[:18]
+    )
+    if len(matches) > 1:
+        return None, (
+            f"Лист с **gid={gid}** в этой книге не найден (после копирования файла gid меняется). "
+            f"Несколько вкладок похожи на калькулятор: **{', '.join(matches)}** — уточните **GID_CALCULATOR_TAB_1** "
+            f"в URL нужной вкладки. Все вкладки: {titles_preview}"
+        )
+
+    return None, (
+        f"В книге **нет** вкладки с **sheetId={gid}** (как в URL `gid=`). "
+        f"Часто **SPREADSHEET_CALCULATOR_ID** в Streamlit Secrets указывает на **другую** книгу, чем в браузере, "
+        f"или таблицу копировали (новый gid). Откройте нужную вкладку и скопируйте **gid** из URL. "
+        f"Вкладки в этой книге: **{titles_preview}**"
+    )
 
 
 def get_sheet_id_by_gid(service, spreadsheet_id: str, gid: int) -> int | None:
@@ -68,14 +177,14 @@ def get_sheet_id_by_gid(service, spreadsheet_id: str, gid: int) -> int | None:
     try:
         meta = service.spreadsheets().get(spreadsheetId=spreadsheet_id, fields="sheets.properties").execute()
         sheets = meta.get("sheets", [])
+        want = int(gid)
         for sh in sheets:
             props = sh.get("properties") or {}
-            if props.get("sheetId") == gid:
-                sid = props.get("sheetId")
-                return int(sid) if sid is not None else None
-        if gid == 0 and sheets:
-            sid0 = (sheets[0].get("properties") or {}).get("sheetId")
-            return int(sid0) if sid0 is not None else None
+            sid = _int_sheet_id(props.get("sheetId"))
+            if sid is not None and sid == want:
+                return sid
+        if want == 0 and sheets:
+            return _int_sheet_id((sheets[0].get("properties") or {}).get("sheetId"))
     except HttpError:
         return None
     except Exception:

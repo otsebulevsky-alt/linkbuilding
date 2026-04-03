@@ -17,6 +17,7 @@ from lib.sheets_service import (
     get_sheet_title_by_gid,
     get_spreadsheet_values_rows,
     get_values_as_dataframe,
+    resolve_calculator_sheet_title,
 )
 
 # Невидимые символы в ячейках Google Sheets (ZWSP, BOM, soft hyphen) ломают сравнение «Ответственный».
@@ -593,12 +594,13 @@ def run_trade_bargain_round(
     # Ленивый импорт: иначе цикл trade_bargain ↔ mail_thread_lookup (там normalize_domain_cell).
     from lib.mail_thread_lookup import find_reply_context_for_peer
 
-    title_calc = get_sheet_title_by_gid(
+    title_calc, calc_sheet_err = resolve_calculator_sheet_title(
         sheets_service, cfg.spreadsheet_calculator_id, cfg.gid_calculator_tab_primary
     )
     if not title_calc:
         report["errors"].append(
-            f"Калькулятор: не найден лист gid={cfg.gid_calculator_tab_primary}. Проверьте **GID_CALCULATOR_TAB_1**."
+            calc_sheet_err
+            or f"Калькулятор: не найден лист gid={cfg.gid_calculator_tab_primary}. Проверьте **GID_CALCULATOR_TAB_1**."
         )
         return report
     report["calc_sheet_title"] = title_calc
