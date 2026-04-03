@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import html as html_module
 import re
+import unicodedata
 from datetime import date, datetime, timedelta
 from typing import Any
 
@@ -165,6 +166,12 @@ def _norm_header(c: Any) -> str:
     return str(c or "").strip().lower()
 
 
+def _header_match_key(label: Any) -> str:
+    """Нормализация заголовка для сравнения (пробелы, NFKC, регистр)."""
+    s = unicodedata.normalize("NFKC", str(label or "").strip().lower())
+    return " ".join(s.split())
+
+
 def resolve_calc_domain_col(df: pd.DataFrame) -> str | None:
     if df is None or df.empty or not len(df.columns):
         return None
@@ -178,13 +185,30 @@ def resolve_calc_domain_col(df: pd.DataFrame) -> str | None:
 def resolve_calc_price_col(df: pd.DataFrame) -> str | None:
     if df is None or df.empty:
         return None
+    skip_if = (
+        "гео",
+        "балл",
+        "score",
+        "rd/ld",
+        "стагнац",
+        "ссылк",
+        "links",
+        "вывод",
+        "referr",
+    )
+    metric_only = ("traffic", "dr", "ld", "rd ")
     for c in df.columns:
         cl = _norm_header(c)
-        if "гео" in cl:
+        cln = _header_match_key(c)
+        if any(x in cl or x in cln for x in skip_if):
             continue
-        if "цена" in cl or ("price" in cl and "$" in str(c)):
+        if any(x in cln for x in metric_only) and not (
+            "цена" in cl or "price" in cln or "cost" in cln
+        ):
+            continue
+        if "цена" in cl or "price" in cln or "cost" in cln:
             return str(c)
-        if cl == "cost $" or ("cost" in cl and "$" in str(c)):
+        if "$" in str(c) and ("usd" in cln or "цена" in cl or "price" in cln):
             return str(c)
     return None
 
@@ -194,25 +218,23 @@ def resolve_calc_responsible_col(df: pd.DataFrame) -> str | None:
         return None
     for c in df.columns:
         cl = _norm_header(c)
-        if "ответствен" in cl or "responsible" in cl:
+        cln = _header_match_key(c)
+        if (
+            "ответствен" in cl
+            or "responsible" in cln
+            or "исполнитель" in cl
+            or "assignee" in cln
+            or cln == "owner"
+            or "owner" in cln
+            or "менеджер" in cl
+            or "linkbuilder" in cln
+        ):
             return str(c)
     return None
 
 
-def resolve_calc_trade_date_col(df: pd.DataFrame, explicit_header: str) -> str | None:
-    if df is None or df.empty:
-        return None
-    ex = (explicit_header or "").strip()
-    if ex:
-        for c in df.columns:
-            if str(c).strip() == ex or _norm_header(c) == ex.lower():
-                return str(c)
-        for c in df.columns:
-            if ex.lower() in _norm_header(c):
-                return str(c)
-        # Явный COL_TRADE_DATE задан, столбца нет — не брать «Дата проверки» и пр.
-        return None
-    # Без COL_TRADE_DATE: сначала колонка комментария Дениса (вариант B), иначе эвристика «дата»
+def _heuristic_calc_trade_date_col(df: pd.DataFrame) -> str | None:
+    """Без точного COL_TRADE_DATE: комментарий Дениса, затем столбцы со словом «дата»."""
     for c in df.columns:
         cl = _norm_header(c)
         if "коммент" in cl and "денис" in cl:
@@ -231,7 +253,33 @@ def resolve_calc_trade_date_col(df: pd.DataFrame, explicit_header: str) -> str |
     for c in candidates:
         if "торг" in _norm_header(c):
             return c
+    for c in df.columns:
+        cln = _header_match_key(c)
+        if cln == "date" or cln.endswith(" date") or cln.startswith("date "):
+            return str(c)
     return candidates[0] if candidates else None
+
+
+def resolve_calc_trade_date_col(df: pd.DataFrame, explicit_header: str) -> str | None:
+    if df is None or df.empty:
+        return None
+    ex = (explicit_header or "").strip()
+    if not ex:
+        return _heuristic_calc_trade_date_col(df)
+    ex_key = _header_match_key(ex)
+    for c in df.columns:
+        if str(c).strip() == ex or _norm_header(c) == ex.lower():
+            return str(c)
+        if _header_match_key(c) == ex_key:
+            return str(c)
+    for c in df.columns:
+        ck = _header_match_key(c)
+        if ex_key and ex_key in ck:
+            return str(c)
+    for c in df.columns:
+        if ex.lower() in _norm_header(c):
+            return str(c)
+    return _heuristic_calc_trade_date_col(df)
 
 
 def calc_trade_date_is_in_window(
@@ -426,7 +474,9 @@ def run_trade_bargain_round(
     if not col_dom or not col_price or not col_resp or not col_date:
         report["errors"].append(
             "Калькулятор: не удалось сопоставить колонки (домен / цена / ответственный / дата). "
-            "Проверьте заголовок **COL_TRADE_DATE** (по умолчанию **Комментарий (Денис)**) или оставьте пустым для авто по слову «дата»."
+            "Книга по умолчанию: **SPREADSHEET_CALCULATOR_ID** + **GID_CALCULATOR_TAB_1** (лист вроде **Telecomasia**). "
+            "Проверьте **COL_TRADE_DATE** (по умолчанию **Комментарий (Денис)**) — при несовпадении шапки код пробует эвристику; "
+            "для цены нужны **Цена** / **Price** / **Cost**; для ответственного — **Ответственный** / **Responsible** / **Assignee**."
         )
         return report
     report["calc_trade_date_column"] = col_date

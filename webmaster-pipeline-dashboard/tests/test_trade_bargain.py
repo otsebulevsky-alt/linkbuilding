@@ -14,6 +14,9 @@ from lib.trade_bargain import (
     normalize_domain_cell,
     parse_calc_trade_date_to_ymd,
     parse_price_number,
+    resolve_calc_domain_col,
+    resolve_calc_price_col,
+    resolve_calc_responsible_col,
     resolve_calc_trade_date_col,
 )
 
@@ -97,9 +100,43 @@ class TestTradeBargain(unittest.TestCase):
         )
         self.assertEqual(resolve_calc_trade_date_col(df, ""), "Комментарий (Денис)")
 
-    def test_resolve_explicit_missing_returns_none(self) -> None:
+    def test_resolve_explicit_wrong_falls_back_to_heuristic(self) -> None:
         df = pd.DataFrame([{"Дата проверки": "2026-01-01", "Комментарий (Денис)": "2026-04-03"}])
-        self.assertIsNone(resolve_calc_trade_date_col(df, "Такого столбца нет"))
+        self.assertEqual(
+            resolve_calc_trade_date_col(df, "Такого столбца нет"),
+            "Комментарий (Денис)",
+        )
+
+    def test_resolve_trade_date_english_date_column(self) -> None:
+        df = pd.DataFrame(
+            [
+                {
+                    "Domain": "x.com",
+                    "Price": 80,
+                    "Responsible": "Oleg",
+                    "Date": "2026 04 03",
+                }
+            ]
+        )
+        self.assertEqual(resolve_calc_trade_date_col(df, ""), "Date")
+
+    def test_resolve_calc_columns_telecomasia_like(self) -> None:
+        df = pd.DataFrame(
+            [
+                {
+                    "Domain": "a.org",
+                    "DR": 50,
+                    "Traffic": 1000,
+                    "Цена, $": 80,
+                    "Ответственный": "Oleg Tsebulovskiy",
+                    "Комментарий (Денис)": "2026 04 03",
+                }
+            ]
+        )
+        self.assertEqual(resolve_calc_domain_col(df), "Domain")
+        self.assertEqual(resolve_calc_price_col(df), "Цена, $")
+        self.assertEqual(resolve_calc_responsible_col(df), "Ответственный")
+        self.assertEqual(resolve_calc_trade_date_col(df, "Комментарий (Денис)"), "Комментарий (Денис)")
 
     def test_calc_trade_date_window(self) -> None:
         self.assertTrue(calc_trade_date_is_in_window((2026, 4, 3), (2026, 4, 3), 0))
@@ -112,6 +149,7 @@ class TestTradeBargain(unittest.TestCase):
         self.assertEqual(parse_calc_trade_date_to_ymd("30.03.2026"), (2026, 3, 30))
         self.assertEqual(parse_calc_trade_date_to_ymd("2026-03-30"), (2026, 3, 30))
         self.assertEqual(parse_calc_trade_date_to_ymd("2026 03 30"), (2026, 3, 30))
+        self.assertEqual(parse_calc_trade_date_to_ymd("2026 04 03"), (2026, 4, 3))
         self.assertEqual(parse_calc_trade_date_to_ymd("2024 04 03"), (2024, 4, 3))
         self.assertIsNone(parse_calc_trade_date_to_ymd(""))
         self.assertIsNone(parse_calc_trade_date_to_ymd("not a date"))

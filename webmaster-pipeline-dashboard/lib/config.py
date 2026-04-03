@@ -256,7 +256,7 @@ def load_config(secrets: Any | None = None) -> AppConfig:
         trade_responsible_name=_secrets_get(
             secrets,
             "TRADE_RESPONSIBLE_NAME",
-            _env("TRADE_RESPONSIBLE_NAME", "Oleg Tsebulevskiy|Tsekhulevskiy"),
+            _env("TRADE_RESPONSIBLE_NAME", "Oleg Tsebulevskiy|Tsekhulevskiy|Tsebulovskiy"),
         ),
         trade_timezone=_secrets_get(secrets, "TRADE_TIMEZONE", _env("TRADE_TIMEZONE", "Europe/Moscow")),
         col_trade_date=_secrets_get(
