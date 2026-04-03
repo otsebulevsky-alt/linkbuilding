@@ -47,7 +47,7 @@ from lib.sheets_service import (
 )
 
 # Меняйте при каждом релизе UI — в подписи под заголовком видно, что Cloud подтянул новый код.
-PANEL_UI_BUILD = "panel-2026-04-03-filter-at-sync-only"
+PANEL_UI_BUILD = "panel-2026-04-03-trade-window-diagnostics"
 
 st.set_page_config(
     page_title="Linkbuilding — панель вебмастеров",
@@ -727,10 +727,13 @@ def main():
         tr = st.session_state.trade_bargain_report
         with st.expander("💬 Торг (калькулятор → «Сбор с ответов» → IMAP-тред → SMTP)", expanded=True):
             st.caption(
-                "Строки **калькулятора** (вкладка `GID_CALCULATOR_TAB_1`), где в колонке **даты торга** "
-                f"({tr.get('calc_trade_date_column') or '…'}) стоит **сегодня** "
-                f"({tr.get('today', '…')} по **{cfg.trade_timezone}**; также **ГГГГ-ММ-ДД**, **ГГГГ ММ ДД**), "
-                "а в колонке **ответственного** есть одна из подстрок: "
+                "Строки **калькулятора** (лист **"
+                f"{tr.get('calc_sheet_title') or '…'}** · `GID_CALCULATOR_TAB_1`), колонка **даты торга** "
+                f"**{tr.get('calc_trade_date_column') or '…'}** — дата в окне: "
+                f"**{tr.get('trade_date_max_age_days', 0)}** дн. назад … сегодня (**TRADE_DATE_MAX_AGE_DAYS**; **0** = только сегодня), "
+                f"сегодня для расчёта: **{tr.get('today', '…')}** (**{cfg.trade_timezone}**). "
+                "Форматы даты: **ДД.ММ.ГГГГ**, **ГГГГ-ММ-ДД**, **ГГГГ ММ ДД**. "
+                "В колонке **ответственного** — одна из подстрок: "
                 f"{', '.join(repr(x) for x in (tr.get('needles') or [])[:12]) or '—'}. "
                 "Email вебмастера — **только** из таблицы **«Сбор с ответов»** (последняя по дате строка с тем же доменом). "
                 "По **IMAP** ищется переписка с этим адресом и доменом; письмо уходит **ответом в тот же тред** "
@@ -744,6 +747,13 @@ def main():
             c2.metric("Доменов к отправке", tr.get("rows_matched", 0))
             c3.metric("Отправлено SMTP", tr.get("sent", 0))
             c4.metric("Доменов обработано", tr.get("domains_considered", 0))
+            fs = tr.get("filter_stats") or {}
+            if fs:
+                st.caption(
+                    f"Лист калькулятора: **{tr.get('calc_sheet_title') or '—'}** · "
+                    f"окно дат: **{tr.get('trade_date_max_age_days', 0)}** дн. (0 = только сегодня)"
+                )
+                st.json(fs)
             for err in tr.get("errors") or []:
                 st.error(err)
             for se in tr.get("smtp_errors") or []:

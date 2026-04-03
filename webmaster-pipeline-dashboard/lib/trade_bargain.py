@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import html as html_module
 import re
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 
 import pandas as pd
@@ -210,6 +210,13 @@ def resolve_calc_trade_date_col(df: pd.DataFrame, explicit_header: str) -> str |
         for c in df.columns:
             if ex.lower() in _norm_header(c):
                 return str(c)
+        # Явный COL_TRADE_DATE задан, столбца нет — не брать «Дата проверки» и пр.
+        return None
+    # Без COL_TRADE_DATE: сначала колонка комментария Дениса (вариант B), иначе эвристика «дата»
+    for c in df.columns:
+        cl = _norm_header(c)
+        if "коммент" in cl and "денис" in cl:
+            return str(c)
     candidates: list[str] = []
     for c in df.columns:
         cl = _norm_header(c)
@@ -225,6 +232,21 @@ def resolve_calc_trade_date_col(df: pd.DataFrame, explicit_header: str) -> str |
         if "торг" in _norm_header(c):
             return c
     return candidates[0] if candidates else None
+
+
+def calc_trade_date_is_in_window(
+    parsed: tuple[int, int, int],
+    today: tuple[int, int, int],
+    max_age_days: int,
+) -> bool:
+    """max_age_days <= 0 — только календарный сегодня; иначе от (сегодня − N) до сегодня включительно."""
+    d_cell = date(parsed[0], parsed[1], parsed[2])
+    d_today = date(today[0], today[1], today[2])
+    if max_age_days <= 0:
+        return d_cell == d_today
+    if d_cell > d_today:
+        return False
+    return (d_today - d_cell).days <= max_age_days
 
 
 def resolve_inbox_domain_col(df: pd.DataFrame) -> str | None:
@@ -339,7 +361,10 @@ def run_trade_bargain_round(
     report: dict[str, Any] = {
         "errors": [],
         "today": "",
+        "calc_sheet_title": "",
         "calc_trade_date_column": "",
+        "trade_date_max_age_days": 0,
+        "filter_stats": {},
         "needles": [],
         "rows_matched": 0,
         "domains_considered": 0,
@@ -359,6 +384,7 @@ def run_trade_bargain_round(
     today_s = today_ddm_yyyy(cfg.trade_timezone)
     report["today"] = today_s
     today_tuple = today_ymd(cfg.trade_timezone)
+    report["trade_date_max_age_days"] = int(cfg.trade_date_max_age_days)
 
     if not (smtp_user and smtp_password):
         report["errors"].append(
@@ -384,6 +410,7 @@ def run_trade_bargain_round(
             f"Калькулятор: не найден лист gid={cfg.gid_calculator_tab_primary}. Проверьте **GID_CALCULATOR_TAB_1**."
         )
         return report
+    report["calc_sheet_title"] = title_calc
 
     df_calc = get_values_as_dataframe(
         sheets_service, cfg.spreadsheet_calculator_id, a1_all_columns(title_calc)
@@ -424,33 +451,67 @@ def run_trade_bargain_round(
         report["errors"].append("«Сбор с ответов»: не найдена колонка почты (ожидается заголовок вроде **Почта**).")
         return report
 
+    stats: dict[str, int] = {
+        "calc_data_rows": int(len(df_calc)),
+        "skip_empty_date": 0,
+        "skip_bad_date": 0,
+        "skip_future_date": 0,
+        "skip_old_date": 0,
+        "skip_responsible": 0,
+        "skip_empty_domain": 0,
+        "skip_bad_price": 0,
+        "passed_filters": 0,
+    }
+
     # Последняя подходящая строка по домену перезаписывает предыдущие (низ листа = новее)
     by_domain: dict[str, dict[str, Any]] = {}
     for _, row in df_calc.iterrows():
         cell_date = row.get(col_date, "")
         parsed = parse_calc_trade_date_to_ymd(cell_date)
-        if parsed != today_tuple:
+        if parsed is None:
+            if not str(cell_date).strip():
+                stats["skip_empty_date"] += 1
+            else:
+                stats["skip_bad_date"] += 1
+            continue
+        if not calc_trade_date_is_in_window(parsed, today_tuple, cfg.trade_date_max_age_days):
+            d_cell = date(parsed[0], parsed[1], parsed[2])
+            d_today = date(today_tuple[0], today_tuple[1], today_tuple[2])
+            if d_cell > d_today:
+                stats["skip_future_date"] += 1
+            else:
+                stats["skip_old_date"] += 1
             continue
         if not cell_matches_responsible(str(row.get(col_resp, "") or ""), needles):
+            stats["skip_responsible"] += 1
             continue
         dom = str(row.get(col_dom, "") or "").strip()
         if not dom:
+            stats["skip_empty_domain"] += 1
             continue
         price = parse_price_number(row.get(col_price))
         if price is None:
+            stats["skip_bad_price"] += 1
             report["skipped"].append({"domain": dom, "reason": "bad_price"})
             continue
+        stats["passed_filters"] += 1
         nd = normalize_domain_cell(dom)
         by_domain[nd] = {"domain": dom, "price": price}
 
+    report["filter_stats"] = stats
     report["rows_matched"] = len(by_domain)
     if not by_domain:
+        win = (
+            f"только **{today_s}**"
+            if cfg.trade_date_max_age_days <= 0
+            else f"от **{today_s}** назад до **{cfg.trade_date_max_age_days}** календарных дней (вкл.)"
+        )
         report["errors"].append(
-            f"Нет строк, где **{col_date}** = сегодня **{today_s}** (по **{cfg.trade_timezone}**), "
-            f"и в **{col_resp}** есть подстрока из фильтра. "
-            f"Допустимые форматы даты: **ДД.ММ.ГГГГ**, **ГГГГ-ММ-ДД**, **ГГГГ ММ ДД**. "
-            f"Дата — в колонке **{col_date}** (**COL_TRADE_DATE** в Secrets; по умолчанию совпадает с **Комментарий (Денис)**). "
-            f"Подстроки: **TRADE_RESPONSIBLE_NAME**, **LINKBUILDER_FILTER**, **LINKBUILDER_ALIASES**."
+            f"Нет строк калькулятора **«{title_calc}»**, где дата в **{col_date}** попадает в окно: {win} "
+            f"(по **{cfg.trade_timezone}**), в **{col_resp}** есть подстрока из фильтра, домен и цена валидны. "
+            f"Смотрите **диагностику фильтра** ниже. Форматы даты: **ДД.ММ.ГГГГ**, **ГГГГ-ММ-ДД**, **ГГГГ ММ ДД**. "
+            f"**TRADE_DATE_MAX_AGE_DAYS** = **0** — только сегодня; иначе окно в днях. "
+            f"**GID_CALCULATOR_TAB_1** должен указывать на лист с данными (например **Telecomasia**)."
         )
         return report
 

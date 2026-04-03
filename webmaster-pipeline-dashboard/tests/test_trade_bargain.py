@@ -7,6 +7,7 @@ import unittest
 import pandas as pd
 
 from lib.trade_bargain import (
+    calc_trade_date_is_in_window,
     cell_matches_responsible,
     collect_responsible_needles,
     find_webmaster_email_in_inbox_log,
@@ -83,6 +84,29 @@ class TestTradeBargain(unittest.TestCase):
         )
         col = resolve_calc_trade_date_col(df, "Комментарий (Денис)")
         self.assertEqual(col, "Комментарий (Денис)")
+
+    def test_resolve_empty_prefers_comment_denys_over_dата_проверки(self) -> None:
+        df = pd.DataFrame(
+            [
+                {
+                    "Domain": "x.com",
+                    "Дата проверки": "2020-01-01",
+                    "Комментарий (Денис)": "2026-04-03",
+                }
+            ]
+        )
+        self.assertEqual(resolve_calc_trade_date_col(df, ""), "Комментарий (Денис)")
+
+    def test_resolve_explicit_missing_returns_none(self) -> None:
+        df = pd.DataFrame([{"Дата проверки": "2026-01-01", "Комментарий (Денис)": "2026-04-03"}])
+        self.assertIsNone(resolve_calc_trade_date_col(df, "Такого столбца нет"))
+
+    def test_calc_trade_date_window(self) -> None:
+        self.assertTrue(calc_trade_date_is_in_window((2026, 4, 3), (2026, 4, 3), 0))
+        self.assertFalse(calc_trade_date_is_in_window((2026, 4, 2), (2026, 4, 3), 0))
+        self.assertTrue(calc_trade_date_is_in_window((2026, 4, 2), (2026, 4, 3), 7))
+        self.assertFalse(calc_trade_date_is_in_window((2026, 3, 1), (2026, 4, 3), 30))
+        self.assertFalse(calc_trade_date_is_in_window((2026, 4, 10), (2026, 4, 3), 30))
 
     def test_parse_calc_trade_date_flexible(self) -> None:
         self.assertEqual(parse_calc_trade_date_to_ymd("30.03.2026"), (2026, 3, 30))

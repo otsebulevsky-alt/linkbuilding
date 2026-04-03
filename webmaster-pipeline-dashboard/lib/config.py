@@ -84,6 +84,8 @@ class AppConfig:
     col_trade_date: str
     # Доля скидки (0.2 = минус 20 %)
     trade_discount_percent: float
+    # «Торг»: 0 = дата только сегодня; N>0 = дата от (сегодня − N) до сегодня включительно
+    trade_date_max_age_days: int
 
     # «Отправить статьи»: максимум писем за одно нажатие (0 = без лимита)
     article_publish_max_send: int
@@ -270,6 +272,17 @@ def load_config(secrets: Any | None = None) -> AppConfig:
                     secrets,
                     "TRADE_DISCOUNT_PERCENT",
                     _env_float("TRADE_DISCOUNT_PERCENT", 0.2),
+                ),
+            ),
+        ),
+        trade_date_max_age_days=max(
+            0,
+            min(
+                366,
+                _secrets_get_int(
+                    secrets,
+                    "TRADE_DATE_MAX_AGE_DAYS",
+                    _env_int("TRADE_DATE_MAX_AGE_DAYS", 30),
                 ),
             ),
         ),
