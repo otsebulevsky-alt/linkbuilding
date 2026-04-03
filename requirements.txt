@@ -1,11 +1,11 @@
 # Streamlit Community Cloud: exactly ONE requirements.txt at repo root (no second file under webmaster-pipeline-dashboard/).
 # После «Processed dependencies!» до UI: SIGSEGV / malloc corruption — чаще нативные watchdog (inotify) или pyarrow.
-# Стек: Python 3.11 (runtime.txt + Settings → General), streamlit первым, pyarrow 17.0.2+, watchdog 5.x, в .streamlit — fileWatcherType=poll.
+# Стек: Python 3.11 (runtime.txt + Settings → General), streamlit первым, pyarrow 16.1.x (17.0.2 на PyPI нет — ломает установку Cloud), watchdog 5.x, fileWatcherType=poll.
 # См. DEPLOY.md § «Oh no» / segfault.
 streamlit==1.41.1
 watchdog==5.0.3
 numpy==1.26.4
-pyarrow==17.0.2
+pyarrow==16.1.0
 pandas==2.2.3
 protobuf==4.25.3
 google-api-python-client==2.154.0

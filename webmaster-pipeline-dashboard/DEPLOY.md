@@ -266,7 +266,7 @@ git push -u github feature/seolb-164-webmaster-prospecting-oleg
 
 1. **Версия Python в приложении:** **Manage app → Settings → General → Python version**. Рекомендуется **3.11** (в паре с корневым [`runtime.txt`](../runtime.txt) **`python-3.11.10`**). **Не используйте 3.13 / 3.14** — бинарные колёса `pandas`/`pyarrow` дают **segfault** или **`malloc(): unsorted double linked list corrupted` / `Aborted`** сразу после «Processed dependencies!». Установщик **uv** иногда **игнорирует** только `runtime.txt`: тогда вручную выставьте **Python 3.11** в UI, **Save**, **Reboot app**. Если после смены версии ошибка остаётся — пересоздайте приложение (Secrets и URL сохраните заранее).
 
-2. **Segfault / malloc / `Aborted` сразу после «Processed dependencies»** (в логах: **Signal 11**, **`malloc(): unsorted double linked list corrupted`**, **`run-streamlit.sh` … Aborted**): (а) Корневой [`runtime.txt`](../runtime.txt) = **`python-3.11.10`** и в UI — **Python 3.11**. (б) Один корневой [`requirements.txt`](../requirements.txt): **streamlit** и **watchdog** пинятся явно, **pyarrow ≥ 17.0.2** (см. файл). (в) В [корневом `.streamlit/config.toml`](../.streamlit/config.toml) и в [`webmaster-pipeline-dashboard/.streamlit/config.toml`](.streamlit/config.toml) задано **`[server] fileWatcherType = "poll"`** — меньше нативного inotify при старте на Cloud. (г) Без второго `requirements.txt` и без **`-r ...`**. (д) **Main file path** = **`webmaster-pipeline-dashboard/app.py`**, **App root** пустой (или корневой шим `app.py` — см. этап F).
+2. **Segfault / malloc / `Aborted` сразу после «Processed dependencies»** (в логах: **Signal 11**, **`malloc(): unsorted double linked list corrupted`**, **`run-streamlit.sh` … Aborted**): (а) Корневой [`runtime.txt`](../runtime.txt) = **`python-3.11.10`** и в UI — **Python 3.11**. (б) Один корневой [`requirements.txt`](../requirements.txt): **streamlit** и **watchdog** пинятся явно, **pyarrow** — только существующая версия с PyPI (см. файл; не указывать несуществующие релизы — иначе **Error installing requirements**). (в) В [корневом `.streamlit/config.toml`](../.streamlit/config.toml) и в [`webmaster-pipeline-dashboard/.streamlit/config.toml`](.streamlit/config.toml) задано **`[server] fileWatcherType = "poll"`** — меньше нативного inotify при старте на Cloud. (г) Без второго `requirements.txt` и без **`-r ...`**. (д) **Main file path** = **`webmaster-pipeline-dashboard/app.py`**, **App root** пустой (или корневой шим `app.py` — см. этап F).
 
 3. **Порт / bind:** в [`.streamlit/config.toml`](.streamlit/config.toml) не должно быть **`server.port`** (например 8503) и **`server.address = "127.0.0.1"`** — иначе health check Cloud не проходит. Локальный порт **8503** — через [run.ps1](run.ps1).
 
@@ -279,6 +279,10 @@ git push -u github feature/seolb-164-webmaster-prospecting-oleg
 7. **Секреты ещё не заданы:** приложение должно открываться и без блока Secrets (почта через «Сменить почту»). Если в логах **`StreamlitSecretNotFoundError`** при чтении Gmail — в коде не должно быть **`st.secrets or {}`** и прямого **`.get()`** на `st.secrets`; чтение ключей — как в `lib.config._secrets_get` (исправлено в коммите `589c898`).
 
 После исправления: **commit → push** на GitHub → в Cloud **Reboot** / **Redeploy**. Если в логах всё ещё фигурирует **`webmaster-pipeline-dashboard/requirements.txt`** — пересоздайте приложение (этап F1).
+
+## Если Cloud: «Error installing requirements»
+
+Чаще всего в логах терминала: **No matching distribution** / **Could not find a version** — в [`requirements.txt`](../requirements.txt) указана **несуществующая** версия пакета (проверьте на [pypi.org](https://pypi.org/)). Исправьте пин, **push**, **Reboot app**.
 
 ---
 
