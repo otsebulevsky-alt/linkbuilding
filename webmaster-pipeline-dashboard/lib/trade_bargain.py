@@ -19,6 +19,15 @@ from lib.sheets_service import (
     get_values_as_dataframe,
 )
 
+# Невидимые символы в ячейках Google Sheets (ZWSP, BOM, soft hyphen) ломают сравнение «Ответственный».
+_HEADER_INVISIBLE_RE = re.compile(r"[\u200b-\u200d\ufeff\u00ad]")
+
+
+def _clean_header_label(c: Any) -> str:
+    s = _HEADER_INVISIBLE_RE.sub("", str(c or "").strip())
+    s = unicodedata.normalize("NFKC", s)
+    return " ".join(s.split())
+
 
 def collect_responsible_needles(cfg: AppConfig) -> list[str]:
     """TRADE_RESPONSIBLE_NAME (можно несколько через |) + LINKBUILDER_FILTER + LINKBUILDER_ALIASES."""
@@ -168,7 +177,7 @@ def parse_price_number(raw: Any) -> float | None:
 
 
 def _norm_header(c: Any) -> str:
-    return str(c or "").strip().lower()
+    return _clean_header_label(c).lower()
 
 
 def _column_names_for_header_probe(header_cells: list[Any]) -> list[str]:
@@ -177,9 +186,8 @@ def _column_names_for_header_probe(header_cells: list[Any]) -> list[str]:
 
 
 def _header_match_key(label: Any) -> str:
-    """Нормализация заголовка для сравнения (пробелы, NFKC, регистр)."""
-    s = unicodedata.normalize("NFKC", str(label or "").strip().lower())
-    return " ".join(s.split())
+    """Нормализация заголовка для сравнения (пробелы, NFKC, регистр, без ZWSP/BOM)."""
+    return _clean_header_label(label).lower()
 
 
 def resolve_calc_domain_col(df: pd.DataFrame) -> str | None:
@@ -236,6 +244,16 @@ def resolve_calc_price_col(df: pd.DataFrame) -> str | None:
     return None
 
 
+def _fallback_responsible_col_telecom_layout(df: pd.DataFrame) -> str | None:
+    """Калькулятор Telecomasia: Domain… колонка M (0-based 12) = ответственный; API иногда даёт `_c12` без текста."""
+    cols = list(df.columns)
+    if len(cols) < 13:
+        return None
+    if not resolve_calc_domain_col(df) or not resolve_calc_price_col(df):
+        return None
+    return str(cols[12])
+
+
 def resolve_calc_responsible_col(df: pd.DataFrame, explicit_header: str = "") -> str | None:
     if df is None or not len(df.columns):
         return None
@@ -243,7 +261,9 @@ def resolve_calc_responsible_col(df: pd.DataFrame, explicit_header: str = "") ->
     if ex:
         ex_key = _header_match_key(ex)
         for c in df.columns:
-            if str(c).strip() == ex or _norm_header(c) == ex.lower():
+            if _clean_header_label(c) == _clean_header_label(ex):
+                return str(c)
+            if _norm_header(c) == ex_key:
                 return str(c)
             if _header_match_key(c) == ex_key:
                 return str(c)
@@ -252,9 +272,8 @@ def resolve_calc_responsible_col(df: pd.DataFrame, explicit_header: str = "") ->
             if ex_key and ex_key in ck:
                 return str(c)
         for c in df.columns:
-            if ex.lower() in _norm_header(c):
+            if ex_key and ex_key in _norm_header(c):
                 return str(c)
-        return None
     for c in df.columns:
         cl = _norm_header(c)
         cln = _header_match_key(c)
@@ -272,7 +291,7 @@ def resolve_calc_responsible_col(df: pd.DataFrame, explicit_header: str = "") ->
             or "linkbuilder" in cln
         ):
             return str(c)
-    return None
+    return _fallback_responsible_col_telecom_layout(df)
 
 
 def _heuristic_calc_trade_date_col(df: pd.DataFrame) -> str | None:
@@ -340,7 +359,7 @@ def calc_trade_date_is_in_window(
 
 
 def _make_unique_sheet_headers(raw: list[Any]) -> list[str]:
-    cells = [str(c).strip() if c is not None else "" for c in raw]
+    cells = [_clean_header_label(c) if c is not None else "" for c in raw]
     seen: dict[str, int] = {}
     out: list[str] = []
     for i, h in enumerate(cells):
@@ -396,6 +415,14 @@ def discover_calculator_dataframe_from_rows(
     return sheet_rows_to_calculator_dataframe(rows, 0), 0
 
 
+def _pad_rows_to_max_width(rows: list[list[Any]]) -> list[list[Any]]:
+    """Выравнивает длины строк: у API часто разная длина рядов — шапка не доходит до M, а данные длиннее."""
+    if not rows:
+        return rows
+    m = max(len(r) for r in rows)
+    return [list(r) + [""] * (m - len(r)) for r in rows]
+
+
 def load_calculator_dataframe_for_trade(
     sheets_service: Any,
     spreadsheet_id: str,
@@ -407,6 +434,7 @@ def load_calculator_dataframe_for_trade(
     # Было ZZ400 — строки ниже не попадали в «торг»; 10000 с запасом под длинные листы.
     rng = f"'{esc}'!A1:ZZ10000"
     rows = get_spreadsheet_values_rows(sheets_service, spreadsheet_id, rng)
+    rows = _pad_rows_to_max_width(rows)
     return discover_calculator_dataframe_from_rows(
         rows, col_trade_date, col_trade_responsible
     )

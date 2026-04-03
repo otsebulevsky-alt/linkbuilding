@@ -19,6 +19,7 @@ from lib.trade_bargain import (
     resolve_calc_price_col,
     resolve_calc_responsible_col,
     resolve_calc_trade_date_col,
+    _pad_rows_to_max_width,
 )
 
 
@@ -157,6 +158,40 @@ class TestTradeBargain(unittest.TestCase):
         )
         self.assertIsNone(resolve_calc_responsible_col(df))
         self.assertEqual(resolve_calc_responsible_col(df, "RB"), "RB")
+
+    def test_resolve_responsible_zwsp_in_header(self) -> None:
+        """ZWSP в заголовке ломал подстроку «ответствен»."""
+        dirty = "Ответ\u200bственный"
+        df = pd.DataFrame(columns=["Domain", "Цена, $", dirty, "Комментарий (Денис)"])
+        self.assertEqual(resolve_calc_responsible_col(df), dirty)
+
+    def test_resolve_responsible_fallback_column_m_placeholder(self) -> None:
+        """Как у Sheets API: 13-й столбец без текста → _c12; типичный Telecomasia layout."""
+        cols = [
+            "Domain",
+            "DR",
+            "Traffic",
+            "RD",
+            "LD",
+            "RD/LD",
+            "Стагнация",
+            "Цена, $",
+            "Ссылки",
+            "Балл",
+            "Вывод",
+            "Гео",
+            "_c12",
+            "Комментарий (Денис)",
+        ]
+        df = pd.DataFrame(columns=cols)
+        self.assertEqual(resolve_calc_responsible_col(df), "_c12")
+
+    def test_pad_rows_header_extends_to_data_width(self) -> None:
+        header = ["Domain", "Цена, $", "Ответственный", "Комментарий (Денис)"]
+        data = ["x.com", 10, "Oleg", "2026-04-03", "extra"]
+        rows = _pad_rows_to_max_width([header, data])
+        self.assertEqual(len(rows[0]), 5)
+        self.assertEqual(len(rows[1]), 5)
 
     def test_price_column_not_blocked_by_sold_like_header(self) -> None:
         df = pd.DataFrame(

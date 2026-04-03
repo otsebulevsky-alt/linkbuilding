@@ -269,7 +269,7 @@ def load_config(secrets: Any | None = None) -> AppConfig:
         col_trade_responsible=_secrets_get(
             secrets,
             "COL_TRADE_RESPONSIBLE",
-            _env("COL_TRADE_RESPONSIBLE", ""),
+            _env("COL_TRADE_RESPONSIBLE", "Ответственный"),
         ),
         trade_discount_percent=max(
             0.0,
