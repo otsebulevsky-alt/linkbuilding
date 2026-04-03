@@ -1,11 +1,10 @@
 # Streamlit Community Cloud: exactly ONE requirements.txt at repo root (no second file under webmaster-pipeline-dashboard/).
-# После «Processed dependencies!» до UI: SIGSEGV — чаще нативный слой file watcher (watchdog/inotify) или лишние .so (pyarrow).
-# Стек: Python 3.11 (runtime.txt + Settings → General), streamlit первым, watchdog 5.x, в .streamlit/config.toml — fileWatcherType=none, runOnSave=false.
-# Pyarrow не пиним: дашборд не читает Parquet; меньше нативных бинарников на Linux Cloud.
-# Streamlit 1.41.x — более предсказуемо на части инстансов Community Cloud (1.44.x у отдельных деплоев снова «Oh no» без Python-трейса).
-# См. DEPLOY.md § «Oh no» / segfault.
+# После «Processed dependencies!» до UI: SIGSEGV — нативный слой (protobuf C++, numpy/glibc, реже watcher). См. DEPLOY.md § «Oh no».
+# Не пинить watchdog отдельно: uv + своя версия конфликтуют с зависимостью streamlit (дублирующие .so → segfault).
+# В app.py до pandas/google: PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python, MALLOC_ARENA_MAX=2.
+# Pyarrow не пиним: дашборд не читает Parquet.
+# Streamlit 1.41.x — стабильнее на части инстансов Community Cloud.
 streamlit==1.41.1
-watchdog==5.0.3
 numpy==1.26.4
 pandas==2.2.3
 protobuf==4.25.3

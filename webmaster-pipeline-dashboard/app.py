@@ -7,6 +7,12 @@ Secrets: see secrets.toml.example and README.md
 
 from __future__ import annotations
 
+import os
+
+# До pandas / google-* / protobuf: на Cloud без этого бывает SIGSEGV сразу после «Processed dependencies».
+os.environ.setdefault("PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION", "python")
+os.environ.setdefault("MALLOC_ARENA_MAX", "2")
+
 import sys
 from pathlib import Path
 
@@ -15,13 +21,20 @@ _APP_DIR = Path(__file__).resolve().parent
 if str(_APP_DIR) not in sys.path:
     sys.path.insert(0, str(_APP_DIR))
 
+import streamlit as st
+
+st.set_page_config(
+    page_title="Linkbuilding — панель вебмастеров",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
 import html
 import json
 import traceback
 from datetime import datetime
 
 import pandas as pd
-import streamlit as st
 from googleapiclient.errors import HttpError
 
 from lib.config import (
@@ -55,7 +68,7 @@ from lib.sheets_service import (
 )
 
 # Меняйте при каждом релизе UI — в подписи под заголовком видно, что Cloud подтянул новый код.
-PANEL_UI_BUILD = "panel-2026-03-30-imap-sent-mailbox-order"
+PANEL_UI_BUILD = "panel-2026-03-30-cloud-segfault-mitigations"
 
 
 def _safe_trade_filter_stats(fs: object) -> dict[str, int]:
@@ -90,12 +103,6 @@ def _trade_bargain_report_shell(cfg, *, errors: list[str]) -> dict:
         "skipped": [],
         "smtp_errors": [],
     }
-
-st.set_page_config(
-    page_title="Linkbuilding — панель вебмастеров",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
 
 
 def _secrets():
