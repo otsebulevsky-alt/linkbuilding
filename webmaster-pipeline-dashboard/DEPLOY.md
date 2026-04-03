@@ -166,7 +166,7 @@ Streamlit читает **GitHub**, вы пушите в **GitLab**. После `
    - репо = только содержимое панели в корне → **`app.py`**
    - репо = весь `linkbuilding` → **`webmaster-pipeline-dashboard/app.py`**
 4. **App URL** (если спросят имя) — любое свободное, например `webmaster-pipeline` → URL будет `https://webmaster-pipeline.streamlit.app` (если не занято).
-5. **Advanced settings** — если есть поле **Main module directory** / **Root directory** / **App root** и репо = весь `linkbuilding`, укажите: **`webmaster-pipeline-dashboard`**
+5. **App root / Main module directory:** при репо = весь `linkbuilding` и **Main file path** = `webmaster-pipeline-dashboard/app.py` поле **App root оставьте пустым** — так же, как в разделе **«Этап F»** выше. Не указывайте `webmaster-pipeline-dashboard` в App root одновременно с путём `webmaster-pipeline-dashboard/app.py` (иначе Cloud может искать файл по неверному пути; см. раздел «Oh no»).
 6. Нажмите **Deploy** / **Развернуть** и дождитесь логов сборки.
 
 ### После первого деплоя (обязательно)

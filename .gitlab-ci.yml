@@ -1,5 +1,5 @@
-# На feature-ветках — только mirror в GitHub (одна лёгкая Docker-джоба), без Auto-DevOps.
-# Иначе пайплайн зависает в «stuck»: очередь из десятков джоб без подходящих runner'ов.
+# На feature-ветках — одна job (тесты дашборда + зеркало в GitHub), без Auto-DevOps.
+# Образ Python тяжелее alpine/git, но по-прежнему один слот runner'а на пайплайн.
 # Полный Auto-DevOps — в .gitlab-ci-autodevops.yml (только $CI_DEFAULT_BRANCH).
 workflow:
   rules:

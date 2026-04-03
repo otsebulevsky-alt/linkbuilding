@@ -10,7 +10,7 @@
 
 **Рабочий минимум сейчас:** папка `webmaster-pipeline-dashboard/` + `.streamlit/secrets.toml` + `.streamlit/gcp-service-account.json` → локальный запуск (**[Шаг 4](#шаг-4-локальный-запуск)** ниже) или [SETUP.md](SETUP.md). Этого достаточно, чтобы «продолжить логику и вёрстку».
 
-**Постоянный URL в интернете (24/7)** — отдельный необязательный слой: [DEPLOY.md](DEPLOY.md) (в т.ч. зеркало GitHub, если понадобится Streamlit Cloud).
+**Постоянный URL в интернете (24/7)** — по [DEPLOY.md](DEPLOY.md) (GitLab CI → GitHub → Streamlit Cloud); для работы только с ПК облако не обязательно.
 
 ### Где лежит ключ Google (канон)
 
