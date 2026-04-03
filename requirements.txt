@@ -1,13 +1,13 @@
 # Streamlit Community Cloud: exactly ONE requirements.txt at repo root (no second file under webmaster-pipeline-dashboard/).
-# uv + Python 3.12+/3.13+ и «тяжёлые» pyarrow на Linux иногда дают сразу после «Processed dependencies!»:
-#   malloc(): unsorted double linked list corrupted / Aborted (падение нативной кучи до UI).
-# Рекомендуемый стек: Python 3.11 (runtime.txt + Settings → General) + pyarrow 14.x + порядок numpy→pyarrow→pandas→streamlit.
-# См. DEPLOY.md § «Oh no» / segfault / malloc.
+# После «Processed dependencies!» до UI: SIGSEGV / malloc corruption — чаще нативные watchdog (inotify) или pyarrow.
+# Стек: Python 3.11 (runtime.txt + Settings → General), streamlit первым, pyarrow 17.0.2+, watchdog 5.x, в .streamlit — fileWatcherType=poll.
+# См. DEPLOY.md § «Oh no» / segfault.
+streamlit==1.41.1
+watchdog==5.0.3
 numpy==1.26.4
-pyarrow==14.0.2
+pyarrow==17.0.2
 pandas==2.2.3
 protobuf==4.25.3
 google-api-python-client==2.154.0
 google-auth==2.36.0
 google-auth-httplib2==0.2.0
-streamlit==1.41.1

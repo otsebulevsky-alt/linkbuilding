@@ -2,6 +2,7 @@
 # Не задавайте server.port / server.address — см. webmaster-pipeline-dashboard/.streamlit/config.toml
 [server]
 headless = true
+fileWatcherType = "poll"
 
 [browser]
 gatherUsageStats = false
