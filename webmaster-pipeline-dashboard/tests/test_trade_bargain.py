@@ -13,6 +13,7 @@ from lib.trade_bargain import (
     normalize_domain_cell,
     parse_calc_trade_date_to_ymd,
     parse_price_number,
+    resolve_calc_trade_date_col,
 )
 
 
@@ -67,6 +68,21 @@ class TestTradeBargain(unittest.TestCase):
             ]
         )
         self.assertEqual(find_webmaster_email_in_inbox_log(df, "c.org"), "b@c.org")
+
+    def test_resolve_trade_date_explicit_comment_column(self) -> None:
+        df = pd.DataFrame(
+            [
+                {
+                    "Domain": "x.com",
+                    "Цена, $": 10,
+                    "Ответственный": "Oleg",
+                    "Комментарий (Денис)": "2026-04-03",
+                    "Дата проверки": "",
+                }
+            ]
+        )
+        col = resolve_calc_trade_date_col(df, "Комментарий (Денис)")
+        self.assertEqual(col, "Комментарий (Денис)")
 
     def test_parse_calc_trade_date_flexible(self) -> None:
         self.assertEqual(parse_calc_trade_date_to_ymd("30.03.2026"), (2026, 3, 30))

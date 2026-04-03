@@ -80,7 +80,7 @@ class AppConfig:
     trade_responsible_name: str
     # Часовой пояс для «сегодня» (ДД.ММ.ГГГГ)
     trade_timezone: str
-    # Точный заголовок столбца с датой торга в калькуляторе (ДД.ММ.ГГГГ); пусто — эвристика по «дата»
+    # Точный заголовок столбца с датой торга в калькуляторе; пусто — эвристика по «дата» (без колонок «коммент»)
     col_trade_date: str
     # Доля скидки (0.2 = минус 20 %)
     trade_discount_percent: float
@@ -257,7 +257,11 @@ def load_config(secrets: Any | None = None) -> AppConfig:
             _env("TRADE_RESPONSIBLE_NAME", "Oleg Tsebulevskiy|Tsekhulevskiy"),
         ),
         trade_timezone=_secrets_get(secrets, "TRADE_TIMEZONE", _env("TRADE_TIMEZONE", "Europe/Moscow")),
-        col_trade_date=_secrets_get(secrets, "COL_TRADE_DATE", _env("COL_TRADE_DATE", "")),
+        col_trade_date=_secrets_get(
+            secrets,
+            "COL_TRADE_DATE",
+            _env("COL_TRADE_DATE", "Комментарий (Денис)"),
+        ),
         trade_discount_percent=max(
             0.0,
             min(

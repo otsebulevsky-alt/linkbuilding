@@ -737,7 +737,7 @@ def main():
                 "(тема **Re:** из найденного письма, In-Reply-To / References). "
                 "Без треда в ящике — пропуск **no_imap_thread**. "
                 "Текст: скидка **TRADE_DISCOUNT_PERCENT** (по умолчанию 20 %). "
-                "**COL_TRADE_DATE**, **TRADE_RESPONSIBLE_NAME** — в Secrets."
+                "**COL_TRADE_DATE** (по умолчанию колонка **Комментарий (Денис)**), **TRADE_RESPONSIBLE_NAME** — в Secrets."
             )
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("Сегодня (фильтр)", tr.get("today", "—"))

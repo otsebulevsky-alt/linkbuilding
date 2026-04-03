@@ -399,7 +399,7 @@ def run_trade_bargain_round(
     if not col_dom or not col_price or not col_resp or not col_date:
         report["errors"].append(
             "Калькулятор: не удалось сопоставить колонки (домен / цена / ответственный / дата). "
-            "Задайте **COL_TRADE_DATE** = точный заголовок столбца с датой торга (не колонка «Комментарий»)."
+            "Проверьте заголовок **COL_TRADE_DATE** (по умолчанию **Комментарий (Денис)**) или оставьте пустым для авто по слову «дата»."
         )
         return report
     report["calc_trade_date_column"] = col_date
@@ -449,7 +449,7 @@ def run_trade_bargain_round(
             f"Нет строк, где **{col_date}** = сегодня **{today_s}** (по **{cfg.trade_timezone}**), "
             f"и в **{col_resp}** есть подстрока из фильтра. "
             f"Допустимые форматы даты: **ДД.ММ.ГГГГ**, **ГГГГ-ММ-ДД**, **ГГГГ ММ ДД**. "
-            f"Дата должна быть в колонке торга (**COL_TRADE_DATE** в Secrets, если автоопределение промахнулось). "
+            f"Дата — в колонке **{col_date}** (**COL_TRADE_DATE** в Secrets; по умолчанию совпадает с **Комментарий (Денис)**). "
             f"Подстроки: **TRADE_RESPONSIBLE_NAME**, **LINKBUILDER_FILTER**, **LINKBUILDER_ALIASES**."
         )
         return report
