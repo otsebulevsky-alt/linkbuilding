@@ -169,6 +169,15 @@ def resolve_inbox_domain_col(df: pd.DataFrame) -> str | None:
 def resolve_inbox_email_col(df: pd.DataFrame) -> str | None:
     if df is None or df.empty:
         return None
+    # Не брать объединённый заголовок вроде «Цена после торг Почта» — там не полный текст ответа.
+    for c in df.columns:
+        cl = _norm_header(c)
+        if not ("почт" in cl or cl == "email" or "e-mail" in cl):
+            continue
+        if "цена" in cl or "торг" in cl or "after" in cl:
+            continue
+        return str(c)
+    # Fallback: колонка с «почт», даже если в заголовке ещё «цена» (лучше, чем None для старых листов).
     for c in df.columns:
         cl = _norm_header(c)
         if "почт" in cl or cl == "email" or "e-mail" in cl:

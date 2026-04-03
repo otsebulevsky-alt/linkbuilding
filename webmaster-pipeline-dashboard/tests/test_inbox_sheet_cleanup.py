@@ -1,4 +1,4 @@
-"""Строки «Сбор с ответов» с шаблоном оплаты или только email помечаются как шум."""
+"""Строки «Сбор с ответов»: шум = bounce / только наш шаблон оплаты (не «только email» — см. IMAP-синк)."""
 
 from __future__ import annotations
 
@@ -36,9 +36,10 @@ class TestMailCellNoise(unittest.TestCase):
         )
         self.assertTrue(mail_cell_is_inbox_noise(cell))
 
-    def test_email_only(self) -> None:
-        self.assertTrue(mail_cell_is_inbox_noise("hi@managementworksmedia.com"))
-        self.assertTrue(mail_cell_is_inbox_noise("info@moneydisquantified.org"))
+    def test_email_only_from_imap_sync_not_noise(self) -> None:
+        """Синк пишет в «Почта» только from_addr — такие строки нельзя считать шумом целиком."""
+        self.assertFalse(mail_cell_is_inbox_noise("hi@managementworksmedia.com"))
+        self.assertFalse(mail_cell_is_inbox_noise("info@moneydisquantified.org"))
 
     def test_bounce_delivery_text_is_noise(self) -> None:
         self.assertTrue(mail_cell_is_inbox_noise(_BOUNCE_SNIPPET))
@@ -46,6 +47,14 @@ class TestMailCellNoise(unittest.TestCase):
     def test_row_noise_by_domain_column(self) -> None:
         row = pd.Series({"Домен": "hunter.io", "Почта": "x@y.com"})
         self.assertTrue(
+            inbox_log_row_is_removable_noise(
+                row, mail_col="Почта", domain_col="Домен"
+            )
+        )
+
+    def test_imap_sync_row_email_only_kept(self) -> None:
+        row = pd.Series({"Домен": "example-blog.com", "Почта": "webmaster@example-blog.com"})
+        self.assertFalse(
             inbox_log_row_is_removable_noise(
                 row, mail_col="Почта", domain_col="Домен"
             )

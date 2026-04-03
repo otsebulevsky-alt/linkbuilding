@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from typing import Any
 
 import pandas as pd
@@ -18,19 +17,14 @@ from lib.sheets_service import (
 from lib.trade_bargain import normalize_domain_cell, resolve_inbox_domain_col, resolve_inbox_email_col
 
 
-# Только адрес в ячейке «Почта» (без текста ответа) — не логируем как ответ вебмастера.
-_EMAIL_ONLY_CELL_RE = re.compile(
-    r"^[^\s@]+@[^\s@]+\.[^\s@]+\s*$",
-    re.I,
-)
-
-
 def mail_cell_is_inbox_noise(cell: str) -> bool:
     """
     True — строку можно убрать из «Сбор с ответов»:
-    - тело ячейки по сути только наш шаблон USDT/PayPal (часто «email + шаблон»);
-    - или в ячейке только email без какого-либо текста ответа;
-    - или текст отказа доставки / mailer-daemon (как в письме Mail Delivery Subsystem).
+    - текст отказа доставки / mailer-daemon;
+    - тело ячейки по сути только наш шаблон USDT/PayPal (без существенного ответа вебмастера).
+
+    Не считаем «шумом» ячейку, где только email: после IMAP-синка колонка «Почта» часто = один адрес
+    (from_addr), полный текст письма в таблице не дублируется — иначе очистка удаляет все строки.
     """
     s = (cell or "").strip()
     if not s:
@@ -39,7 +33,7 @@ def mail_cell_is_inbox_noise(cell: str) -> bool:
         return True
     if is_our_payment_followup_template_only(body=s):
         return True
-    return bool(_EMAIL_ONLY_CELL_RE.match(s))
+    return False
 
 
 def inbox_log_row_is_removable_noise(
@@ -145,6 +139,16 @@ def remove_inbox_noise_rows(
         to_del = _data_row_indices_to_delete_api_0based(df, mail_col, domain_col)
         report["candidates"] = len(to_del)
         if not to_del:
+            return report
+
+        n_data = len(df)
+        if n_data > 0 and len(to_del) >= max(1, int(n_data * 0.75)):
+            report["errors"].append(
+                "Операция отменена: к удалению отмечено ≥75% строк данных — вероятна ошибка "
+                "(например, колонка «Почта» = только адрес после синка IMAP). "
+                "Ничего не удалено. Восстановите прежние данные: **Файл → История версий** в Google Таблицах."
+            )
+            report["candidates"] = len(to_del)
             return report
 
         batch_delete_rows_by_zero_based_indices(

@@ -48,7 +48,7 @@ from lib.sheets_service import (
 )
 
 # Меняйте при каждом релизе UI — в подписи под заголовком видно, что Cloud подтянул новый код.
-PANEL_UI_BUILD = "panel-2026-04-03-streamlit-1.41-cloud-stack"
+PANEL_UI_BUILD = "panel-2026-04-03-inbox-cleanup-safe"
 
 st.set_page_config(
     page_title="Linkbuilding — панель вебмастеров",
@@ -680,8 +680,10 @@ def main():
 
     with st.expander("Убрать из «Сбор с ответов» строки, которые не ответы вебмастера", expanded=False):
         st.caption(
-            "Удаляет **строки данных** (шапка не трогается), если в **«Почте»** только шаблон оплаты / только email / отказ доставки, "
-            "или в **«Домене»** сервис вроде github.com, slack.com, hunter.io (список в **lib/mail_parse.py**)."
+            "Удаляет **строки данных** (шапка не трогается), если в **«Почте»** отказ доставки / mailer-daemon или по сути только наш шаблон USDT–PayPal, "
+            "либо в **«Домене»** сервис (github.com, slack.com, hunter.io — см. **lib/mail_parse.py**). "
+            "Ячейка **только с email** после кнопки «Прочитать почту» — нормальный формат, **не** удаляется. "
+            "Если снова удалили лишнее: **Файл → История версий** в Google Таблицах."
         )
         if st.button("Удалить такие строки из листа", key="inbox_noise_cleanup"):
             st.session_state.inbox_cleanup_report = remove_inbox_noise_rows(
