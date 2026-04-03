@@ -113,6 +113,141 @@ def _gmail_raw_search_uids(imap: imaplib.IMAP4_SSL, raw_q: str, parse_uids) -> l
     return []
 
 
+def _discover_gmail_all_mail_folder(imap: imaplib.IMAP4_SSL) -> str | None:
+    """Папка со флагом \\All (Gmail: «Вся почта» / All Mail), локализованное имя подхватится из LIST."""
+    try:
+        typ, rows = imap.list()
+        if typ != "OK" or not rows:
+            return None
+        for row in rows:
+            if not isinstance(row, (bytes, bytearray)):
+                continue
+            if b"\\All" not in row or b"\\Noselect" in row:
+                continue
+            s = row.decode("utf-8", errors="replace")
+            i = s.rfind('"')
+            if i <= 0:
+                continue
+            j = s.rfind('"', 0, i)
+            if j < 0:
+                continue
+            return s[j + 1 : i]
+    except Exception:
+        return None
+    return None
+
+
+def _mailboxes_for_thread_search(primary: str, imap: imaplib.IMAP4_SSL | None) -> list[str]:
+    """Сначала выбранный ящик (обычно INBOX), затем «Вся почта» — тред может быть вне Входящих."""
+    out: list[str] = []
+    seen: set[str] = set()
+    p = (primary or "").strip() or "INBOX"
+
+    def add(name: str) -> None:
+        n = name.strip()
+        if not n:
+            return
+        key = n.casefold()
+        if key in seen:
+            return
+        seen.add(key)
+        out.append(n)
+
+    add(p)
+    if imap is not None:
+        discovered = _discover_gmail_all_mail_folder(imap)
+        if discovered:
+            add(discovered)
+    add("[Gmail]/All Mail")
+    return out
+
+
+def _parse_uid_list_static(data) -> list[int]:
+    if not data or not data[0]:
+        return []
+    chunk = data[0]
+    if isinstance(chunk, bytes):
+        chunk = chunk.decode("ascii", errors="replace")
+    return [int(x) for x in str(chunk).split() if x.isdigit()]
+
+
+def _collect_search_uids(
+    imap: imaplib.IMAP4_SSL, peer: str, dom: str, _parse_uid_list
+) -> tuple[list[int], bool]:
+    strict_queries = (
+        f"(from:{peer} OR to:{peer}) {dom}",
+        f"(from:{peer} OR to:{peer}) subject:{dom}",
+    )
+    uids: list[int] = []
+    domain_required_in_headers = False
+    for raw_q in strict_queries:
+        uids = _gmail_raw_search_uids(imap, raw_q, _parse_uid_list)
+        if uids:
+            return uids, domain_required_in_headers
+
+    uids = _gmail_raw_search_uids(imap, f"from:{peer} OR to:{peer}", _parse_uid_list)
+    domain_required_in_headers = bool(uids)
+    if uids:
+        return uids, domain_required_in_headers
+
+    try:
+        typ, data = imap.search(None, "TEXT", dom)
+        if typ == "OK":
+            uids = _parse_uid_list(data)
+            domain_required_in_headers = True
+    except imaplib.IMAP4.error:
+        uids = []
+    return uids, domain_required_in_headers
+
+
+def _scan_uids_for_reply_context(
+    imap: imaplib.IMAP4_SSL,
+    uids: list[int],
+    *,
+    peer: str,
+    dom: str,
+    domain_required_in_headers: bool,
+    max_uids_to_scan: int,
+) -> dict[str, str] | None:
+    uids = sorted(set(uids), reverse=True)
+    for uid in uids[:max_uids_to_scan]:
+        try:
+            typ, msg_data = imap.uid("FETCH", str(uid), "(BODY.PEEK[HEADER])")
+        except Exception:
+            continue
+        if typ != "OK" or not msg_data:
+            continue
+        raw: bytes | None = None
+        for chunk in msg_data:
+            if isinstance(chunk, tuple) and len(chunk) >= 2:
+                cand = chunk[1]
+                if isinstance(cand, (bytes, bytearray)):
+                    raw = bytes(cand)
+                    break
+        if raw is None:
+            continue
+        try:
+            msg = email.message_from_bytes(raw)
+        except Exception:
+            continue
+        if not _header_peer_match(msg, peer):
+            continue
+        if domain_required_in_headers and not _headers_mention_domain(msg, dom):
+            continue
+        subj = _decode_mime(msg.get("Subject"))
+        mid_raw = _decode_mime(msg.get("Message-ID")).strip()
+        if not mid_raw:
+            continue
+        mid_n = _normalize_msg_id(mid_raw)
+        refs = _build_references(msg)
+        return {
+            "message_id": mid_n,
+            "references": refs,
+            "subject": _reply_subject(subj)[:998],
+        }
+    return None
+
+
 def find_reply_context_for_peer(
     *,
     imap_host: str,
@@ -123,108 +258,56 @@ def find_reply_context_for_peer(
     domain: str,
     timeout_sec: int = 120,
     max_uids_to_scan: int = 400,
-) -> dict[str, str] | None:
+) -> tuple[dict[str, str] | None, str]:
     """
-    Последнее (по UID) письмо в ящике, где фигурируют peer и домен — для In-Reply-To / References.
-
-    **domain** — как в реестре / «Сбор с ответов»; перед поиском приводится к виду host (как `normalize_domain_cell`).
-    Возвращает: message_id, references, subject (уже с Re: при необходимости).
-    Gmail: X-GM-RAW; иначе TEXT по домену + фильтр peer по заголовкам.
+    (context | None, diagnostic). context — message_id, references, subject.
+    diagnostic пустая строка при успехе; иначе короткий код для отчёта UI (например imap_no_uids:INBOX).
     """
     peer = (peer_email or "").strip()
     dom = normalize_domain_cell(domain)
     if not peer or not dom:
-        return None
+        return None, "bad_peer_or_domain"
 
     try:
         imap_cm = imaplib.IMAP4_SSL(imap_host, timeout=max(60, timeout_sec))
     except OSError:
-        return None
+        return None, "imap_connect_failed"
 
+    last_hint = "imap_unknown"
     try:
         with imap_cm as imap:
             try:
                 imap.login(imap_user, imap_password)
             except imaplib.IMAP4.error:
-                return None
-            typ, _ = imap.select(imap_mailbox)
-            if typ != "OK":
-                return None
+                return None, "imap_login_failed"
 
-            def _parse_uid_list(data) -> list[int]:
-                if not data or not data[0]:
-                    return []
-                chunk = data[0]
-                if isinstance(chunk, bytes):
-                    chunk = chunk.decode("ascii", errors="replace")
-                return [int(x) for x in str(chunk).split() if x.isdigit()]
-
-            # Несколько запросов: комбинация (peer+домен) на Gmail часто даёт пусто, хотя тред есть
-            # (домен в Subject, peer в From/To). Тогда — широкий peer-only + фильтр по заголовкам.
-            strict_queries = (
-                f"(from:{peer} OR to:{peer}) {dom}",
-                f"(from:{peer} OR to:{peer}) subject:{dom}",
-            )
-            uids: list[int] = []
-            domain_required_in_headers = False
-            for raw_q in strict_queries:
-                uids = _gmail_raw_search_uids(imap, raw_q, _parse_uid_list)
-                if uids:
-                    break
-
-            if not uids:
-                uids = _gmail_raw_search_uids(imap, f"from:{peer} OR to:{peer}", _parse_uid_list)
-                domain_required_in_headers = bool(uids)
-
-            if not uids:
+            for mbox in _mailboxes_for_thread_search(imap_mailbox, imap):
                 try:
-                    typ, data = imap.search(None, "TEXT", dom)
-                    if typ == "OK":
-                        uids = _parse_uid_list(data)
-                        domain_required_in_headers = True
-                except imaplib.IMAP4.error:
-                    uids = []
-
-            if not uids:
-                return None
-
-            uids = sorted(set(uids), reverse=True)
-            for uid in uids[:max_uids_to_scan]:
-                try:
-                    typ, msg_data = imap.uid("FETCH", str(uid), "(BODY.PEEK[HEADER])")
+                    typ, _ = imap.select(mbox)
                 except Exception:
+                    last_hint = f"imap_select_error:{mbox}"
                     continue
-                if typ != "OK" or not msg_data:
+                if typ != "OK":
+                    last_hint = f"imap_select_failed:{mbox}"
                     continue
-                raw: bytes | None = None
-                for chunk in msg_data:
-                    if isinstance(chunk, tuple) and len(chunk) >= 2:
-                        cand = chunk[1]
-                        if isinstance(cand, (bytes, bytearray)):
-                            raw = bytes(cand)
-                            break
-                if raw is None:
-                    continue
-                try:
-                    msg = email.message_from_bytes(raw)
-                except Exception:
-                    continue
-                if not _header_peer_match(msg, peer):
-                    continue
-                if domain_required_in_headers and not _headers_mention_domain(msg, dom):
-                    continue
-                subj = _decode_mime(msg.get("Subject"))
-                mid_raw = _decode_mime(msg.get("Message-ID")).strip()
-                if not mid_raw:
-                    continue
-                mid_n = _normalize_msg_id(mid_raw)
-                refs = _build_references(msg)
-                return {
-                    "message_id": mid_n,
-                    "references": refs,
-                    "subject": _reply_subject(subj)[:998],
-                }
 
-            return None
+                uids, domain_req = _collect_search_uids(imap, peer, dom, _parse_uid_list_static)
+                if not uids:
+                    last_hint = f"imap_no_uids:{mbox}"
+                    continue
+
+                ctx = _scan_uids_for_reply_context(
+                    imap,
+                    uids,
+                    peer=peer,
+                    dom=dom,
+                    domain_required_in_headers=domain_req,
+                    max_uids_to_scan=max_uids_to_scan,
+                )
+                if ctx:
+                    return ctx, ""
+                last_hint = f"imap_no_matching_thread:{mbox} uids={len(uids)}"
+
+            return None, last_hint
     except Exception:
-        return None
+        return None, "imap_exception"

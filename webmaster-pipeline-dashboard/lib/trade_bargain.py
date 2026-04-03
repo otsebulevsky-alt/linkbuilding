@@ -769,7 +769,7 @@ def run_trade_bargain_round(
         if not to_addr:
             report["skipped"].append({"domain": dom, "reason": "no_email_in_inbox_log"})
             continue
-        ctx = find_reply_context_for_peer(
+        ctx, imap_diag = find_reply_context_for_peer(
             imap_host=imap_host,
             imap_user=imap_user,
             imap_password=imap_password,
@@ -779,7 +779,9 @@ def run_trade_bargain_round(
             timeout_sec=max(60, int(imap_timeout_sec)),
         )
         if not ctx:
-            report["skipped"].append({"domain": dom, "reason": "no_imap_thread"})
+            report["skipped"].append(
+                {"domain": dom, "reason": "no_imap_thread", "imap_detail": imap_diag or ""}
+            )
             continue
         new_price = round(price * (1.0 - discount), 2)
         pct = int(round(discount * 100))

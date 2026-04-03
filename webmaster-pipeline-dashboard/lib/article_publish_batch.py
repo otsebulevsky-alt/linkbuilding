@@ -205,7 +205,7 @@ def run_article_publish_batch(
         if not to_addr:
             report["skipped"].append({"registry": t["registry"], "domain": dom, "reason": "no_email_in_inbox_log"})
             continue
-        ctx = find_reply_context_for_peer(
+        ctx, imap_diag = find_reply_context_for_peer(
             imap_host=imap_host,
             imap_user=imap_user,
             imap_password=imap_password,
@@ -216,7 +216,12 @@ def run_article_publish_batch(
         )
         if not ctx:
             report["skipped"].append(
-                {"registry": t["registry"], "domain": dom, "reason": "no_imap_thread"}
+                {
+                    "registry": t["registry"],
+                    "domain": dom,
+                    "reason": "no_imap_thread",
+                    "imap_detail": imap_diag or "",
+                }
             )
             continue
         body = build_article_publish_email_html(art, t.get("cost") or "")

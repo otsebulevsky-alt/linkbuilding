@@ -5,7 +5,12 @@ from __future__ import annotations
 import email
 import unittest
 
-from lib.mail_thread_lookup import _build_references, _headers_mention_domain, _normalize_msg_id
+from lib.mail_thread_lookup import (
+    _build_references,
+    _headers_mention_domain,
+    _mailboxes_for_thread_search,
+    _normalize_msg_id,
+)
 
 
 class TestMailThreadLookup(unittest.TestCase):
@@ -50,6 +55,15 @@ class TestMailThreadLookup(unittest.TestCase):
         raw = b"Subject: Re: offer for www.example.com\r\nMessage-ID: <a@b>\r\n\r\n"
         msg = email.message_from_bytes(raw)
         self.assertTrue(_headers_mention_domain(msg, "example.com"))
+
+    def test_mailboxes_for_thread_search_inbox_then_all_mail(self) -> None:
+        m = _mailboxes_for_thread_search("INBOX", None)
+        self.assertEqual(m[0], "INBOX")
+        self.assertIn("[Gmail]/All Mail", m)
+
+    def test_mailboxes_dedupes_all_mail_primary(self) -> None:
+        m = _mailboxes_for_thread_search("[Gmail]/All Mail", None)
+        self.assertEqual(m.count("[Gmail]/All Mail"), 1)
 
 
 if __name__ == "__main__":
