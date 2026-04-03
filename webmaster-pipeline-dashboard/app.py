@@ -9,9 +9,11 @@ from __future__ import annotations
 
 import os
 
-# До pandas / google-* / protobuf: на Cloud без этого бывает SIGSEGV сразу после «Processed dependencies».
+# До pandas / google-* / protobuf / pyarrow (streamlit): на Cloud без этого бывает SIGSEGV после «Processed dependencies».
 os.environ.setdefault("PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION", "python")
 os.environ.setdefault("MALLOC_ARENA_MAX", "2")
+for _k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS"):
+    os.environ.setdefault(_k, "1")
 
 import sys
 from pathlib import Path
@@ -68,7 +70,7 @@ from lib.sheets_service import (
 )
 
 # Меняйте при каждом релизе UI — в подписи под заголовком видно, что Cloud подтянул новый код.
-PANEL_UI_BUILD = "panel-2026-03-30-imap-mailbox-quoted"
+PANEL_UI_BUILD = "panel-2026-04-03-cloud-pin-pyarrow-tornado"
 
 
 def _safe_trade_filter_stats(fs: object) -> dict[str, int]:

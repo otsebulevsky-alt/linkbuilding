@@ -8,9 +8,11 @@ from __future__ import annotations
 
 import os
 
-# До загрузки дашборда: снижает риск SIGSEGV на Streamlit Community Cloud (protobuf C ext, glibc arenas).
+# До загрузки дашборда: снижает риск SIGSEGV на Streamlit Community Cloud (protobuf, pyarrow, glibc, BLAS).
 os.environ.setdefault("PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION", "python")
 os.environ.setdefault("MALLOC_ARENA_MAX", "2")
+for _k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS"):
+    os.environ.setdefault(_k, "1")
 
 import sys
 from importlib.util import module_from_spec, spec_from_file_location
