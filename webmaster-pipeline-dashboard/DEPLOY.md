@@ -4,6 +4,12 @@
 
 **Прод-панель (HACK-382):** [https://webmaster-pipeline-dashboard.streamlit.app/](https://webmaster-pipeline-dashboard.streamlit.app/)
 
+### «Сбор с ответов»: шум и ответы (важно)
+
+- **Задумано так:** «не ответы» отсекаются **автоматически при нажатии «Прочитать почту»** — такие UNSEEN **не попадают** в таблицу и помечаются прочитанными (причины в отчёте синка: `from_self`, `mail_delivery_bounce`, `payment_template_only`, `no_domains`, `noise_platform_hosts` и т.д.). Логика в **`lib/webmaster_inbox_sync.py`** и **`lib/mail_parse.py`**.
+- **Ответы** — это то, что прошло фильтры и получило строку(и) с доменом.
+- **Удаление строк с листа «очисткой шума» из панели убрано** — оно работало по уже записанным ячейкам (в т.ч. только email в «Почте» после синка) и могло стереть **все** строки. Чистка таблицы вручную — только в Google Sheets (при необходимости **история версий**).
+
 ## Учётные записи Rantsports (канон)
 
 | Что | Правило |
@@ -85,7 +91,7 @@ Job **`mirror_github_streamlit`** в [`.gitlab-ci.yml`](../.gitlab-ci.yml) вы�
 - **Нужно:** путь вида **`.../linkbuilding/requirements.txt`** (только корень репозитория).
 - **Плохо:** **`webmaster-pipeline-dashboard/requirements.txt`** или предупреждение **«More than one requirements file»** — значит Cloud клонировал **старый коммит** или кеш; сделайте **Reboot app**. Если не помогло — **удалите приложение** в Streamlit и создайте заново с теми же Repository / Branch / Secrets (см. [удаление приложения](https://docs.streamlit.io/deploy/streamlit-community-cloud/manage-your-app/delete-your-app)), затем снова **Deploy**.
 
-После успешного обновления кода в подписи под заголовком панели должна появиться метка из константы **`PANEL_UI_BUILD`** в `webmaster-pipeline-dashboard/app.py` (например **`panel-2026-04-03-no-inbox-noise-ui`**).
+После успешного обновления кода в подписи под заголовком панели должна появиться метка из константы **`PANEL_UI_BUILD`** в `webmaster-pipeline-dashboard/app.py` (например **`panel-2026-04-03-filter-at-sync-only`**).
 
 ### Этап G. Streamlit — Secrets (Google и опции)
 
@@ -118,7 +124,7 @@ Job **`mirror_github_streamlit`** в [`.gitlab-ci.yml`](../.gitlab-ci.yml) вы�
 
 1. Откройте выданный URL вида `https://<имя>.streamlit.app`.
 2. Должны открыться вкладки панели; данные из Google Sheets подтянутся, если таблицы расшарены на **`client_email`** из JSON и Secrets сохранены без ошибок.
-3. **Проверка, что Cloud подтянул свежий код:** в серой подписи под заголовком «Панель линкбилдинга» в начале должна быть метка **`PANEL_UI_BUILD`** из `app.py` (например **`panel-2026-04-03-no-inbox-noise-ui`**). **«Сменить почту»** — **справа от заголовка**; в форме — **логин** и при необходимости **пароль приложения** (можно только на сессию, без Secrets). Ниже — четыре синие кнопки. Если метки нет — push на GitHub и **Reboot app**.
+3. **Проверка, что Cloud подтянул свежий код:** в серой подписи под заголовком «Панель линкбилдинга» в начале должна быть метка **`PANEL_UI_BUILD`** из `app.py` (например **`panel-2026-04-03-filter-at-sync-only`**). **«Сменить почту»** — **справа от заголовка**; в форме — **логин** и при необходимости **пароль приложения** (можно только на сессию, без Secrets). Ниже — четыре синие кнопки. Если метки нет — push на GitHub и **Reboot app**.
 4. **Кнопка «проверка публикаций»:** в реестрах должны быть колонки **Anchor** / **Outgoing link** (или имена из **`COL_ANCHOR`**, **`COL_OUTGOING_LINK`** в Secrets). Иначе в отчёте будет предупреждение, а сверка I+J не выполнится. Опционально: **`GOOGLE_CSE_*`** для проверки индекса, **`EEAT_AUTHOR_MARKERS`** — см. [README.md](README.md).
 
 ### Опционально: локальный `git push` на GitHub с ПК (без CI)
