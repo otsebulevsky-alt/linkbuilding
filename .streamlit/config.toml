@@ -2,7 +2,8 @@
 # Не задавайте server.port / server.address — см. webmaster-pipeline-dashboard/.streamlit/config.toml
 [server]
 headless = true
-fileWatcherType = "poll"
+# none — полностью без watcher (на Community Cloud после «Processed dependencies» бывает SIGSEGV даже с poll).
+fileWatcherType = "none"
 
 [browser]
 gatherUsageStats = false

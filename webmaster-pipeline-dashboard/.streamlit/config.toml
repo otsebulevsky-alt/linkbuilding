@@ -5,8 +5,8 @@
 #   py -m streamlit run app.py --server.port 8503 --server.address 127.0.0.1
 [server]
 headless = true
-# poll — без нативного inotify/watchdog на Linux (меньше SIGSEGV на Community Cloud при старте).
-fileWatcherType = "poll"
+# none — без file watcher (на Cloud меньше нативных крашей при старте, чем poll/watchdog).
+fileWatcherType = "none"
 
 [browser]
 gatherUsageStats = false
