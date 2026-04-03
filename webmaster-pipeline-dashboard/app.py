@@ -48,7 +48,7 @@ from lib.sheets_service import (
 )
 
 # Меняйте при каждом релизе UI — в подписи под заголовком видно, что Cloud подтянул новый код.
-PANEL_UI_BUILD = "panel-2026-03-30-logic-sync"
+PANEL_UI_BUILD = "panel-2026-04-03-streamlit-1.41-cloud-stack"
 
 st.set_page_config(
     page_title="Linkbuilding — панель вебмастеров",

@@ -85,7 +85,7 @@ Job **`mirror_github_streamlit`** в [`.gitlab-ci.yml`](../.gitlab-ci.yml) вы�
 - **Нужно:** путь вида **`.../linkbuilding/requirements.txt`** (только корень репозитория).
 - **Плохо:** **`webmaster-pipeline-dashboard/requirements.txt`** или предупреждение **«More than one requirements file»** — значит Cloud клонировал **старый коммит** или кеш; сделайте **Reboot app**. Если не помогло — **удалите приложение** в Streamlit и создайте заново с теми же Repository / Branch / Secrets (см. [удаление приложения](https://docs.streamlit.io/deploy/streamlit-community-cloud/manage-your-app/delete-your-app)), затем снова **Deploy**.
 
-После успешного обновления кода в подписи под заголовком панели должна появиться метка из константы **`PANEL_UI_BUILD`** в `webmaster-pipeline-dashboard/app.py` (например **`panel-2026-03-30-logic-sync`**).
+После успешного обновления кода в подписи под заголовком панели должна появиться метка из константы **`PANEL_UI_BUILD`** в `webmaster-pipeline-dashboard/app.py` (например **`panel-2026-04-03-streamlit-1.41-cloud-stack`**).
 
 ### Этап G. Streamlit — Secrets (Google и опции)
 
@@ -118,7 +118,7 @@ Job **`mirror_github_streamlit`** в [`.gitlab-ci.yml`](../.gitlab-ci.yml) вы�
 
 1. Откройте выданный URL вида `https://<имя>.streamlit.app`.
 2. Должны открыться вкладки панели; данные из Google Sheets подтянутся, если таблицы расшарены на **`client_email`** из JSON и Secrets сохранены без ошибок.
-3. **Проверка, что Cloud подтянул свежий код:** в серой подписи под заголовком «Панель линкбилдинга» в начале должна быть метка **`PANEL_UI_BUILD`** из `app.py` (например **`panel-2026-03-30-logic-sync`**). **«Сменить почту»** — **справа от заголовка**; в форме — **логин** и при необходимости **пароль приложения** (можно только на сессию, без Secrets). Ниже — четыре синие кнопки. Если метки нет — push на GitHub и **Reboot app**.
+3. **Проверка, что Cloud подтянул свежий код:** в серой подписи под заголовком «Панель линкбилдинга» в начале должна быть метка **`PANEL_UI_BUILD`** из `app.py` (например **`panel-2026-04-03-streamlit-1.41-cloud-stack`**). **«Сменить почту»** — **справа от заголовка**; в форме — **логин** и при необходимости **пароль приложения** (можно только на сессию, без Secrets). Ниже — четыре синие кнопки. Если метки нет — push на GitHub и **Reboot app**.
 4. **Кнопка «проверка публикаций»:** в реестрах должны быть колонки **Anchor** / **Outgoing link** (или имена из **`COL_ANCHOR`**, **`COL_OUTGOING_LINK`** в Secrets). Иначе в отчёте будет предупреждение, а сверка I+J не выполнится. Опционально: **`GOOGLE_CSE_*`** для проверки индекса, **`EEAT_AUTHOR_MARKERS`** — см. [README.md](README.md).
 
 ### Опционально: локальный `git push` на GitHub с ПК (без CI)
@@ -260,7 +260,7 @@ git push -u github feature/seolb-164-webmaster-prospecting-oleg
 
 1. **Версия Python в приложении:** **Manage app → Settings → General → Python version**. Должно быть **3.12** (или стабильная 3.11), **не 3.14**. При 3.14 в логах нередко встречается **`corrupted unsorted chunks`** — смените на **3.12**, **Save**, затем **Reboot app**. По документации Streamlit смена мажорной версии Python иногда требует пересоздать приложение; если после смены и перезапуска ошибка остаётся — удалите приложение и задеплойте снова с **Advanced settings → Python 3.12** (сохраните Secrets и URL в заметку заранее).
 
-2. **Segmentation fault / health check `EOF` сразу после «Processed dependencies»:** (а) В **корне** зеркала GitHub `linkbuilding` (рядом с `requirements.txt`) должен быть **[`runtime.txt`](../runtime.txt)** со строкой **`python-3.12.8`**. Установщик **uv** на Community Cloud часто **не** подхватывает `runtime.txt` только из `webmaster-pipeline-dashboard/` — тогда может подняться **Python 3.13+**, и **`streamlit`** падает с **segfault**. **Commit → push** на GitHub, **Reboot app**. (б) Один корневой **`requirements.txt`**, без второго файла и без **`-r ...`**. Пины **`pyarrow==14.0.2`**, **`protobuf==4.25.3`**, **`pandas==2.1.4`**, **`streamlit==1.36.0`**. (в) В **Settings → General** вручную **Python 3.12** (не 3.14), **Save**, **Reboot**; при необходимости **Python 3.11** и **Main file path** = **`webmaster-pipeline-dashboard/app.py`**, **App root** пустой.
+2. **Segmentation fault / health check `EOF` сразу после «Processed dependencies»** (в логах: `run-streamlit.sh` / **Signal 11**): (а) В **корне** зеркала GitHub `linkbuilding` (рядом с `requirements.txt`) должен быть **[`runtime.txt`](../runtime.txt)** со строкой **`python-3.12.8`**. Установщик **uv** на Community Cloud часто **не** подхватывает `runtime.txt` только из `webmaster-pipeline-dashboard/` — тогда может подняться **Python 3.13+**, и бинарные колёса дают **segfault**. **Commit → push** на GitHub, **Reboot app**. (б) Один корневой **`requirements.txt`**, без второго файла и без **`-r ...`**. Актуальные пины см. в [`requirements.txt`](../requirements.txt) (стек **streamlit 1.41.x + pandas 2.2.x + pyarrow 16.x** под Linux/Python 3.12; при смене версий синхронизируйте с этим абзацем). (в) В **Settings → General** вручную **Python 3.12** (не 3.13 / 3.14), **Save**, **Reboot**; при необходимости **Python 3.11** и **Main file path** = **`webmaster-pipeline-dashboard/app.py`**, **App root** пустой.
 
 3. **Порт / bind:** в [`.streamlit/config.toml`](.streamlit/config.toml) не должно быть **`server.port`** (например 8503) и **`server.address = "127.0.0.1"`** — иначе health check Cloud не проходит. Локальный порт **8503** — через [run.ps1](run.ps1).
 
@@ -291,4 +291,4 @@ git push -u github feature/seolb-164-webmaster-prospecting-oleg
 - [ ] В облаке задан `GOOGLE_SERVICE_ACCOUNT_JSON` (или эквивалент через env в Docker).
 - [ ] Книга «Возможности оплаты» (`17MoDWn…`) открыта для SA, если нужна вкладка «Варианты оплаты».
 
-**Последнее обновление:** 2026-03-30 (URL прода: webmaster-pipeline-dashboard.streamlit.app; проверка публикаций: I+J + EEAT; метка `PANEL_UI_BUILD` в `app.py`)
+**Последнее обновление:** 2026-04-03 (Cloud segfault: обновлён стек в корневом `requirements.txt`; URL прода; метка `PANEL_UI_BUILD` в `app.py`)
