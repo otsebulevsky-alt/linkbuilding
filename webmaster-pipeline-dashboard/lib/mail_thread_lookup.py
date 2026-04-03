@@ -79,6 +79,40 @@ def _reply_subject(original: str) -> str:
     return f"Re: {o}"
 
 
+def _headers_mention_domain(msg: Message, dom: str) -> bool:
+    """Домен есть в Subject / From / To / Cc / Reply-To / References / In-Reply-To (как в типичных outreach-тредах)."""
+    d = (dom or "").strip().lower()
+    if not d:
+        return False
+    variants = {d}
+    if d.startswith("www."):
+        variants.add(d[4:])
+    else:
+        variants.add("www." + d)
+    blob = " ".join(
+        [
+            _decode_mime(msg.get("Subject")),
+            _decode_mime(msg.get("From")),
+            _decode_mime(msg.get("To")),
+            _decode_mime(msg.get("Cc")),
+            _decode_mime(msg.get("Reply-To")),
+            _decode_mime(msg.get("References")),
+            _decode_mime(msg.get("In-Reply-To")),
+        ]
+    ).lower()
+    return any(v in blob for v in variants)
+
+
+def _gmail_raw_search_uids(imap: imaplib.IMAP4_SSL, raw_q: str, parse_uids) -> list[int]:
+    try:
+        typ, data = imap.uid("SEARCH", None, "X-GM-RAW", raw_q)
+        if typ == "OK":
+            return parse_uids(data)
+    except imaplib.IMAP4.error:
+        pass
+    return []
+
+
 def find_reply_context_for_peer(
     *,
     imap_host: str,
@@ -88,7 +122,7 @@ def find_reply_context_for_peer(
     peer_email: str,
     domain: str,
     timeout_sec: int = 120,
-    max_uids_to_scan: int = 150,
+    max_uids_to_scan: int = 400,
 ) -> dict[str, str] | None:
     """
     Последнее (по UID) письмо в ящике, где фигурируют peer и домен — для In-Reply-To / References.
@@ -125,27 +159,36 @@ def find_reply_context_for_peer(
                     chunk = chunk.decode("ascii", errors="replace")
                 return [int(x) for x in str(chunk).split() if x.isdigit()]
 
+            # Несколько запросов: комбинация (peer+домен) на Gmail часто даёт пусто, хотя тред есть
+            # (домен в Subject, peer в From/To). Тогда — широкий peer-only + фильтр по заголовкам.
+            strict_queries = (
+                f"(from:{peer} OR to:{peer}) {dom}",
+                f"(from:{peer} OR to:{peer}) subject:{dom}",
+            )
             uids: list[int] = []
-            raw_q = f"(from:{peer} OR to:{peer}) {dom}"
-            try:
-                typ, data = imap.uid("SEARCH", None, "X-GM-RAW", raw_q)
-                if typ == "OK":
-                    uids = _parse_uid_list(data)
-            except imaplib.IMAP4.error:
-                uids = []
+            domain_required_in_headers = False
+            for raw_q in strict_queries:
+                uids = _gmail_raw_search_uids(imap, raw_q, _parse_uid_list)
+                if uids:
+                    break
+
+            if not uids:
+                uids = _gmail_raw_search_uids(imap, f"from:{peer} OR to:{peer}", _parse_uid_list)
+                domain_required_in_headers = bool(uids)
 
             if not uids:
                 try:
                     typ, data = imap.search(None, "TEXT", dom)
                     if typ == "OK":
                         uids = _parse_uid_list(data)
+                        domain_required_in_headers = True
                 except imaplib.IMAP4.error:
                     uids = []
 
             if not uids:
                 return None
 
-            uids.sort(reverse=True)
+            uids = sorted(set(uids), reverse=True)
             for uid in uids[:max_uids_to_scan]:
                 try:
                     typ, msg_data = imap.uid("FETCH", str(uid), "(BODY.PEEK[HEADER])")
@@ -167,6 +210,8 @@ def find_reply_context_for_peer(
                 except Exception:
                     continue
                 if not _header_peer_match(msg, peer):
+                    continue
+                if domain_required_in_headers and not _headers_mention_domain(msg, dom):
                     continue
                 subj = _decode_mime(msg.get("Subject"))
                 mid_raw = _decode_mime(msg.get("Message-ID")).strip()

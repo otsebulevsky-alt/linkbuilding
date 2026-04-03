@@ -56,7 +56,7 @@ from lib.sheets_service import (
 )
 
 # Меняйте при каждом релизе UI — в подписи под заголовком видно, что Cloud подтянул новый код.
-PANEL_UI_BUILD = "panel-2026-04-03-inbox-email-cell-parse-first-address"
+PANEL_UI_BUILD = "panel-2026-04-03-imap-thread-peer-subject-fallback"
 
 
 def _safe_trade_filter_stats(fs: object) -> dict[str, int]:
@@ -854,7 +854,8 @@ def main():
                 "Если в ячейке **«Почта»** после адреса идёт текст ответа — берётся **первый email** в ячейке (иначе IMAP-запрос ломался). "
                 "По **IMAP** ищется переписка с этим адресом и доменом; письмо уходит **ответом в тот же тред** "
                 "(тема **Re:** из найденного письма, In-Reply-To / References). "
-                "Без треда в ящике — пропуск **no_imap_thread**. "
+                "Поиск треда в **INBOX**: Gmail — несколько запросов (в т.ч. **subject:домен** и переписка **from/to** + домен в заголовках). "
+                "Без треда в ящике — пропуск **no_imap_thread** (если письма в другой папке — перенесите в **Входящие** или настройте **IMAP_MAILBOX**). "
                 "Текст: скидка **TRADE_DISCOUNT_PERCENT** (по умолчанию 20 %). "
                 "**COL_TRADE_DATE** (по умолчанию **Комментарий (Денис)**), при необходимости **COL_TRADE_RESPONSIBLE** "
                 "(точное имя столбца), **TRADE_RESPONSIBLE_NAME** — в Secrets."
