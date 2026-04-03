@@ -48,7 +48,7 @@ from lib.sheets_service import (
 )
 
 # Меняйте при каждом релизе UI — в подписи под заголовком видно, что Cloud подтянул новый код.
-PANEL_UI_BUILD = "panel-2026-04-03-trade-crash-guard"
+PANEL_UI_BUILD = "panel-2026-04-03-mail-form-keys"
 
 
 def _safe_trade_filter_stats(fs: object) -> dict[str, int]:
@@ -259,6 +259,10 @@ def registry_diagnostics(
             st.warning("Колонка статуса не найдена — ожидается `Status` или заголовок со «status».")
 
 
+MAIL_FORM_EMAIL_KEY = "mail_form_email_input"
+MAIL_FORM_PW_KEY = "mail_form_app_password_input"
+
+
 def _render_mail_change_panel(secrets_mail_user: str, secrets_have_mail_password: bool) -> None:
     """Адрес + опционально пароль приложения в сессии; IMAP/SMTP без обязательного Secrets для пароля."""
     st.markdown("---")
@@ -282,15 +286,26 @@ def _render_mail_change_panel(secrets_mail_user: str, secrets_have_mail_password
         )
 
     cur = ov or (secrets_mail_user or "")
+    # Внутри st.form нельзя стабильно использовать value=... на каждом rerun — падает Streamlit при вводе.
+    if st.session_state.get("_sync_mail_form_defaults"):
+        st.session_state[MAIL_FORM_EMAIL_KEY] = cur
+        st.session_state[MAIL_FORM_PW_KEY] = ""
+        st.session_state["_sync_mail_form_defaults"] = False
+    if MAIL_FORM_EMAIL_KEY not in st.session_state:
+        st.session_state[MAIL_FORM_EMAIL_KEY] = cur
+    if MAIL_FORM_PW_KEY not in st.session_state:
+        st.session_state[MAIL_FORM_PW_KEY] = ""
+
     with st.form("mail_session_override_form"):
         new_mail = st.text_input(
             "Адрес почты (логин Gmail)",
-            value=cur,
+            key=MAIL_FORM_EMAIL_KEY,
             placeholder="name@company.com",
         )
         app_pw = st.text_input(
             "Пароль приложения Google (16 символов)",
             type="password",
+            key=MAIL_FORM_PW_KEY,
             placeholder="" if secrets_have_mail_password else "обязательно, если нет в Secrets",
             help="Не пароль от аккаунта Google. Создать: Google → Безопасность → пароли приложений.",
         )
@@ -363,7 +378,10 @@ def main():
         st.markdown("# Панель линкбилдинга — вебмастеры")
     with row_mail:
         if st.button("Сменить почту", key="hdr_change_mail", type="primary", use_container_width=True):
-            st.session_state.mail_settings_panel = not st.session_state.mail_settings_panel
+            opening = not st.session_state.mail_settings_panel
+            st.session_state.mail_settings_panel = opening
+            if opening:
+                st.session_state["_sync_mail_form_defaults"] = True
 
     if mail_ok and sess_pw_active and not secrets_have_mail_password:
         mail_line = f"**Почта:** `{html.escape(mail_addr)}` · пароль **в сессии** (вкладка браузера)"
@@ -383,7 +401,14 @@ def main():
     )
 
     if st.session_state.mail_settings_panel:
-        _render_mail_change_panel(secrets_mail_u, secrets_have_mail_password)
+        try:
+            _render_mail_change_panel(secrets_mail_u, secrets_have_mail_password)
+        except Exception as e:
+            st.error(
+                f"Ошибка формы «Сменить почту» (**{type(e).__name__}**): {e}. "
+                "Обновите страницу. Если повторяется — пришлите текст из Manage app → Logs."
+            )
+            st.session_state.mail_settings_panel = False
 
     # До проверки Sheets — чтобы стили шапки применялись даже при st.stop() из-за SA.
     st.markdown(
