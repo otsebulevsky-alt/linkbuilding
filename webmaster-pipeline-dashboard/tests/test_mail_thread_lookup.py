@@ -14,6 +14,16 @@ from lib.mail_thread_lookup import (
 )
 
 
+class _FakeImapList:
+    """Минимальная заглушка: только list() для _mailboxes_for_thread_search."""
+
+    def __init__(self, rows: list[bytes]) -> None:
+        self._rows = rows
+
+    def list(self) -> tuple[str, list[bytes]]:
+        return "OK", self._rows
+
+
 class TestMailThreadLookup(unittest.TestCase):
     def test_normalize_msg_id_adds_brackets(self) -> None:
         self.assertEqual(_normalize_msg_id("abc@mail.gmail.com"), "<abc@mail.gmail.com>")
@@ -61,6 +71,17 @@ class TestMailThreadLookup(unittest.TestCase):
         """Без сессии IMAP нет LIST — только основной ящик (нет хардкода [Gmail]/All Mail)."""
         m = _mailboxes_for_thread_search("INBOX", None)
         self.assertEqual(m, ["INBOX"])
+
+    def test_mailboxes_with_imap_sent_then_all(self) -> None:
+        """После INBOX идут папки \\Sent, затем \\All (исходящие с доменом в теме — в Sent)."""
+        fake = _FakeImapList(
+            [
+                rb'(\HasNoChildren \All) "/" "[Gmail]/All Mail"',
+                rb'(\HasNoChildren \Sent) "/" "[Gmail]/Sent Mail"',
+            ]
+        )
+        m = _mailboxes_for_thread_search("INBOX", fake)
+        self.assertEqual(m, ["INBOX", "[Gmail]/Sent Mail", "[Gmail]/All Mail"])
 
     def test_extract_quoted_mailbox_from_list_row_ascii(self) -> None:
         row = rb'(\HasNoChildren \All) "/" "[Gmail]/All Mail"'

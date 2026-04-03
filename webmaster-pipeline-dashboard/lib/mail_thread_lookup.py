@@ -135,8 +135,8 @@ def _extract_last_quoted_mailbox_from_list_row(row: bytes) -> str | None:
         return inner.decode("latin-1", errors="replace")
 
 
-def _gmail_all_mail_folders_from_list(imap: imaplib.IMAP4_SSL) -> list[str]:
-    """Все папки с \\All (Gmail «Вся почта» — имя зависит от языка UI, не использовать хардкод [Gmail]/All Mail)."""
+def _gmail_folders_with_list_flag(imap: imaplib.IMAP4_SSL, flag: bytes) -> list[str]:
+    """Имена папок из IMAP LIST, где в флагах есть flag (например \\Sent, \\All)."""
     out: list[str] = []
     try:
         typ, rows = imap.list()
@@ -145,7 +145,7 @@ def _gmail_all_mail_folders_from_list(imap: imaplib.IMAP4_SSL) -> list[str]:
         for row in rows:
             if not isinstance(row, (bytes, bytearray)):
                 continue
-            if b"\\All" not in row or b"\\Noselect" in row:
+            if flag not in row or b"\\Noselect" in row:
                 continue
             name = _extract_last_quoted_mailbox_from_list_row(row)
             if name:
@@ -156,7 +156,11 @@ def _gmail_all_mail_folders_from_list(imap: imaplib.IMAP4_SSL) -> list[str]:
 
 
 def _mailboxes_for_thread_search(primary: str, imap: imaplib.IMAP4_SSL | None) -> list[str]:
-    """Сначала выбранный ящик (обычно INBOX), затем папки \\All из LIST — без англ. хардкода (на ru-Gmail его нет)."""
+    """INBOX (или IMAP_MAILBOX) → **Отправленные** (\\Sent) → **Вся почта** (\\All) из LIST.
+
+    Торг: исходящее «мы → вебмастер» с доменом в теме часто лежит в **Sent**, а не во входящих;
+    без этого X-GM-RAW во INBOX даёт 0–1 ложных UID, а \\All на части аккаунтов не открывается по SELECT.
+    """
     out: list[str] = []
     seen: set[str] = set()
     p = (primary or "").strip() or "INBOX"
@@ -173,7 +177,9 @@ def _mailboxes_for_thread_search(primary: str, imap: imaplib.IMAP4_SSL | None) -
 
     add(p)
     if imap is not None:
-        for folder in _gmail_all_mail_folders_from_list(imap):
+        for folder in _gmail_folders_with_list_flag(imap, b"\\Sent"):
+            add(folder)
+        for folder in _gmail_folders_with_list_flag(imap, b"\\All"):
             add(folder)
     return out
 
