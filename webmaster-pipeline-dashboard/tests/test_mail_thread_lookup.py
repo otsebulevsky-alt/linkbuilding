@@ -7,6 +7,7 @@ import unittest
 
 from lib.mail_thread_lookup import (
     _build_references,
+    _extract_last_quoted_mailbox_from_list_row,
     _headers_mention_domain,
     _mailboxes_for_thread_search,
     _normalize_msg_id,
@@ -56,14 +57,20 @@ class TestMailThreadLookup(unittest.TestCase):
         msg = email.message_from_bytes(raw)
         self.assertTrue(_headers_mention_domain(msg, "example.com"))
 
-    def test_mailboxes_for_thread_search_inbox_then_all_mail(self) -> None:
+    def test_mailboxes_without_imap_only_primary(self) -> None:
+        """Без сессии IMAP нет LIST — только основной ящик (нет хардкода [Gmail]/All Mail)."""
         m = _mailboxes_for_thread_search("INBOX", None)
-        self.assertEqual(m[0], "INBOX")
-        self.assertIn("[Gmail]/All Mail", m)
+        self.assertEqual(m, ["INBOX"])
 
-    def test_mailboxes_dedupes_all_mail_primary(self) -> None:
-        m = _mailboxes_for_thread_search("[Gmail]/All Mail", None)
-        self.assertEqual(m.count("[Gmail]/All Mail"), 1)
+    def test_extract_quoted_mailbox_from_list_row_ascii(self) -> None:
+        row = rb'(\HasNoChildren \All) "/" "[Gmail]/All Mail"'
+        self.assertEqual(_extract_last_quoted_mailbox_from_list_row(row), "[Gmail]/All Mail")
+
+    def test_extract_quoted_mailbox_preserves_modified_utf7(self) -> None:
+        row = rb'(\All) "/" "[Gmail]/&BBIQSQZAAEEQQQBDgGo-"'
+        name = _extract_last_quoted_mailbox_from_list_row(row)
+        self.assertIsNotNone(name)
+        self.assertTrue(name.startswith("[Gmail]/"))
 
 
 if __name__ == "__main__":

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import email
 import imaplib
+import re
 from email.header import decode_header
 from email.message import Message
 from email.utils import getaddresses, parseaddr
@@ -113,32 +114,46 @@ def _gmail_raw_search_uids(imap: imaplib.IMAP4_SSL, raw_q: str, parse_uids) -> l
     return []
 
 
-def _discover_gmail_all_mail_folder(imap: imaplib.IMAP4_SSL) -> str | None:
-    """Папка со флагом \\All (Gmail: «Вся почта» / All Mail), локализованное имя подхватится из LIST."""
+def _unescape_imap_quoted_inner(inner: bytes) -> bytes:
+    return inner.replace(b"\\\"", b'"').replace(b"\\\\", b"\\")
+
+
+def _extract_last_quoted_mailbox_from_list_row(row: bytes) -> str | None:
+    """Имя ящика из строки LIST — последнее поле в кавычках (modified UTF-7 не портим через utf-8 decode всей строки)."""
+    matches = list(re.finditer(rb'"((?:[^"\\]|\\.)*)"', row))
+    if not matches:
+        return None
+    inner = _unescape_imap_quoted_inner(matches[-1].group(1))
+    if not inner.strip():
+        return None
+    try:
+        return inner.decode("ascii")
+    except UnicodeDecodeError:
+        return inner.decode("latin-1", errors="replace")
+
+
+def _gmail_all_mail_folders_from_list(imap: imaplib.IMAP4_SSL) -> list[str]:
+    """Все папки с \\All (Gmail «Вся почта» — имя зависит от языка UI, не использовать хардкод [Gmail]/All Mail)."""
+    out: list[str] = []
     try:
         typ, rows = imap.list()
         if typ != "OK" or not rows:
-            return None
+            return []
         for row in rows:
             if not isinstance(row, (bytes, bytearray)):
                 continue
             if b"\\All" not in row or b"\\Noselect" in row:
                 continue
-            s = row.decode("utf-8", errors="replace")
-            i = s.rfind('"')
-            if i <= 0:
-                continue
-            j = s.rfind('"', 0, i)
-            if j < 0:
-                continue
-            return s[j + 1 : i]
+            name = _extract_last_quoted_mailbox_from_list_row(row)
+            if name:
+                out.append(name)
     except Exception:
-        return None
-    return None
+        return []
+    return out
 
 
 def _mailboxes_for_thread_search(primary: str, imap: imaplib.IMAP4_SSL | None) -> list[str]:
-    """Сначала выбранный ящик (обычно INBOX), затем «Вся почта» — тред может быть вне Входящих."""
+    """Сначала выбранный ящик (обычно INBOX), затем папки \\All из LIST — без англ. хардкода (на ru-Gmail его нет)."""
     out: list[str] = []
     seen: set[str] = set()
     p = (primary or "").strip() or "INBOX"
@@ -155,10 +170,8 @@ def _mailboxes_for_thread_search(primary: str, imap: imaplib.IMAP4_SSL | None) -
 
     add(p)
     if imap is not None:
-        discovered = _discover_gmail_all_mail_folder(imap)
-        if discovered:
-            add(discovered)
-    add("[Gmail]/All Mail")
+        for folder in _gmail_all_mail_folders_from_list(imap):
+            add(folder)
     return out
 
 
@@ -281,19 +294,22 @@ def find_reply_context_for_peer(
             except imaplib.IMAP4.error:
                 return None, "imap_login_failed"
 
+            meaningful: str | None = None
+            extra_select_errors: list[str] = []
+
             for mbox in _mailboxes_for_thread_search(imap_mailbox, imap):
                 try:
                     typ, _ = imap.select(mbox)
                 except Exception:
-                    last_hint = f"imap_select_error:{mbox}"
+                    extra_select_errors.append(f"select_error:{mbox}")
                     continue
                 if typ != "OK":
-                    last_hint = f"imap_select_failed:{mbox}"
+                    extra_select_errors.append(f"select_failed:{mbox}")
                     continue
 
                 uids, domain_req = _collect_search_uids(imap, peer, dom, _parse_uid_list_static)
                 if not uids:
-                    last_hint = f"imap_no_uids:{mbox}"
+                    meaningful = f"imap_no_uids:{mbox}"
                     continue
 
                 ctx = _scan_uids_for_reply_context(
@@ -306,8 +322,14 @@ def find_reply_context_for_peer(
                 )
                 if ctx:
                     return ctx, ""
-                last_hint = f"imap_no_matching_thread:{mbox} uids={len(uids)}"
+                meaningful = f"imap_no_matching_thread:{mbox} uids={len(uids)}"
 
-            return None, last_hint
+            if meaningful and extra_select_errors:
+                return None, meaningful + " | " + "; ".join(extra_select_errors)
+            if meaningful:
+                return None, meaningful
+            if extra_select_errors:
+                return None, "imap_" + "; ".join(extra_select_errors)
+            return None, "imap_unknown"
     except Exception:
         return None, "imap_exception"

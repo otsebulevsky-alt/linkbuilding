@@ -55,7 +55,7 @@ from lib.sheets_service import (
 )
 
 # Меняйте при каждом релизе UI — в подписи под заголовком видно, что Cloud подтянул новый код.
-PANEL_UI_BUILD = "panel-2026-04-03-lazy-article-streamlit-1411"
+PANEL_UI_BUILD = "panel-2026-04-03-gmail-all-from-list-no-hardcode"
 
 
 def _safe_trade_filter_stats(fs: object) -> dict[str, int]:
