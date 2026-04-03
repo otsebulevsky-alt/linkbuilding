@@ -313,4 +313,4 @@ git push -u github feature/seolb-164-webmaster-prospecting-oleg
 - [ ] В облаке задан `GOOGLE_SERVICE_ACCOUNT_JSON` (или эквивалент через env в Docker).
 - [ ] Книга «Возможности оплаты» (`17MoDWn…`) открыта для SA, если нужна вкладка «Варианты оплаты».
 
-**Последнее обновление:** 2026-04-03 (Cloud segfault: **`fileWatcherType = "none"`**, без пина **pyarrow** в корневом `requirements.txt`)
+**Последнее обновление:** 2026-04-03 (Cloud: **`fileWatcherType = "none"`**, **`runOnSave` / `allowRunOnSave` = false**, **streamlit 1.44.x**, без **pyarrow** в корневом `requirements.txt`; защита API при `service is None`)

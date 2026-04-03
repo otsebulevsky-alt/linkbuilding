@@ -1,9 +1,10 @@
 # Streamlit Community Cloud: exactly ONE requirements.txt at repo root (no second file under webmaster-pipeline-dashboard/).
 # После «Processed dependencies!» до UI: SIGSEGV — чаще нативный слой file watcher (watchdog/inotify) или лишние .so (pyarrow).
-# Стек: Python 3.11 (runtime.txt + Settings → General), streamlit первым, watchdog 5.x, в .streamlit/config.toml — fileWatcherType=none (Cloud не нужен hot-reload).
+# Стек: Python 3.11 (runtime.txt + Settings → General), streamlit первым, watchdog 5.x, в .streamlit/config.toml — fileWatcherType=none, runOnSave=false.
 # Pyarrow не пиним: дашборд не читает Parquet; меньше нативных бинарников на Linux Cloud.
+# Streamlit ≥1.44 — актуальные колёса/рантайм на Linux Cloud (меньше крашей при старте, чем 1.41.x у части деплоев).
 # См. DEPLOY.md § «Oh no» / segfault.
-streamlit==1.41.1
+streamlit==1.44.1
 watchdog==5.0.3
 numpy==1.26.4
 pandas==2.2.3

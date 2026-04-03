@@ -4,6 +4,8 @@
 headless = true
 # none — полностью без watcher (на Community Cloud после «Processed dependencies» бывает SIGSEGV даже с poll).
 fileWatcherType = "none"
+runOnSave = false
+allowRunOnSave = false
 
 [browser]
 gatherUsageStats = false

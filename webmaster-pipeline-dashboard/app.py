@@ -56,7 +56,7 @@ from lib.sheets_service import (
 )
 
 # Меняйте при каждом релизе UI — в подписи под заголовком видно, что Cloud подтянул новый код.
-PANEL_UI_BUILD = "panel-2026-04-03-cloud-filewatcher-none-no-pyarrow"
+PANEL_UI_BUILD = "panel-2026-04-03-streamlit-144-guards-runonsave"
 
 
 def _safe_trade_filter_stats(fs: object) -> dict[str, int]:

@@ -125,7 +125,6 @@ def _secrets_lookup_raw(secrets: Any, key: str) -> Any:
         return getattr(secrets, key, None)
     except Exception:
         return None
-    return None
 
 
 def _secrets_get(secrets: Any, key: str, default: str = "") -> str:

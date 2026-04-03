@@ -71,6 +71,8 @@ _CALC_TAB_TITLE_ALIASES = frozenset(
 
 def get_sheet_title_by_gid(service, spreadsheet_id: str, gid: int) -> str | None:
     """Return sheet title for numeric sheetId (same as gid in URL). gid=0 — первая вкладка книги."""
+    if service is None:
+        return None
     if gid < 0:
         return None
     try:
@@ -101,6 +103,8 @@ def resolve_calculator_sheet_title(
     gid: int,
 ) -> tuple[str | None, str]:
     """(title, err_html). err пустой при успехе. Отличает 403/404 от «gid не в этой книге»; fallback по имени вкладки."""
+    if service is None:
+        return None, "Клиент Google Sheets не инициализирован (проверьте **GOOGLE_SERVICE_ACCOUNT_JSON** и **Reboot app**)."
     if not spreadsheet_id or not str(spreadsheet_id).strip():
         return None, "Не задан **SPREADSHEET_CALCULATOR_ID** (книга калькулятора)."
     if gid < 0:
@@ -172,6 +176,8 @@ def resolve_calculator_sheet_title(
 
 def get_sheet_id_by_gid(service, spreadsheet_id: str, gid: int) -> int | None:
     """Numeric sheetId для batchUpdate (совпадает с #gid= в URL)."""
+    if service is None:
+        return None
     if gid < 0:
         return None
     try:

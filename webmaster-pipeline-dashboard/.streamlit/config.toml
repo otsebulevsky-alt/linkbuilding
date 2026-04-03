@@ -7,6 +7,8 @@
 headless = true
 # none — без file watcher (на Cloud меньше нативных крашей при старте, чем poll/watchdog).
 fileWatcherType = "none"
+runOnSave = false
+allowRunOnSave = false
 
 [browser]
 gatherUsageStats = false
