@@ -26,6 +26,13 @@
 
 ---
 
+## Приложения (Streamlit)
+
+| Сервис | Путь | Назначение |
+|--------|------|------------|
+| Панель вебмастеров (реестры, «Жду публикации», IMAP/SMTP) | [webmaster-pipeline-dashboard/README.md](webmaster-pipeline-dashboard/README.md) | HACK-382, вариант E |
+| Подготовка списка доменов из Ahrefs | [placement-prep-app/README.md](placement-prep-app/README.md) | Вычитание уже размещённых |
+
 ## Структура
 
 ```
