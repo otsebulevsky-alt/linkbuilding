@@ -34,7 +34,6 @@ from lib.config import (
 )
 from lib.mail_imap import fetch_unread_summaries
 from lib.mail_smtp import send_smtp_html
-from lib.article_publish_batch import run_article_publish_batch
 from lib.publication_check_batch import run_publication_check_batch
 from lib.trade_bargain import collect_responsible_needles, run_trade_bargain_round
 from lib.inbox_sheet_dedupe import dedupe_and_highlight_inbox_sheet
@@ -56,7 +55,7 @@ from lib.sheets_service import (
 )
 
 # Меняйте при каждом релизе UI — в подписи под заголовком видно, что Cloud подтянул новый код.
-PANEL_UI_BUILD = "panel-2026-04-03-imap-allmail-imap-detail"
+PANEL_UI_BUILD = "panel-2026-04-03-lazy-article-streamlit-1411"
 
 
 def _safe_trade_filter_stats(fs: object) -> dict[str, int]:
@@ -670,6 +669,9 @@ def main():
                     "capped": False,
                 }
             else:
+                # Ленивый импорт: не тянуть mail_thread_lookup при холодном старте (меньше риска «Oh no» на Cloud).
+                from lib.article_publish_batch import run_article_publish_batch
+
                 st.session_state.article_publish_report = run_article_publish_batch(
                     sheets_service=svc,
                     cfg=cfg,
@@ -854,7 +856,7 @@ def main():
                 "Если в ячейке **«Почта»** после адреса идёт текст ответа — берётся **первый email** в ячейке (иначе IMAP-запрос ломался). "
                 "По **IMAP** ищется переписка с этим адресом и доменом; письмо уходит **ответом в тот же тред** "
                 "(тема **Re:** из найденного письма, In-Reply-To / References). "
-                "Поиск треда: сначала **IMAP_MAILBOX** (часто **INBOX**), затем **«Вся почта»** Gmail (`[Gmail]/All Mail` / папка с флагом \\All), если тред не во «Входящих». "
+                "Поиск треда: сначала **IMAP_MAILBOX** (часто **INBOX**), затем папка **Вся почта** / **All Mail** в Gmail (имя в IMAP LIST), если тред не во «Входящих». "
                 "Запросы: **subject:домен**, **from/to** + домен в заголовках. В пропусках колонка **imap_detail** — почему не нашли тред. "
                 "Без треда — **no_imap_thread**; при **imap_login_failed** проверьте пароль приложения / Secrets. "
                 "Текст: скидка **TRADE_DISCOUNT_PERCENT** (по умолчанию 20 %). "
