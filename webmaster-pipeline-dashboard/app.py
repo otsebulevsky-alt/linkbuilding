@@ -29,7 +29,6 @@ from lib.mail_smtp import send_smtp_html
 from lib.article_publish_batch import run_article_publish_batch
 from lib.publication_check_batch import run_publication_check_batch
 from lib.trade_bargain import run_trade_bargain_round
-from lib.inbox_sheet_cleanup import remove_inbox_noise_rows
 from lib.inbox_sheet_dedupe import dedupe_and_highlight_inbox_sheet
 from lib.webmaster_inbox_sync import sync_unseen_webmasters_to_inbox_sheet
 from lib.sheets_service import (
@@ -48,7 +47,7 @@ from lib.sheets_service import (
 )
 
 # Меняйте при каждом релизе UI — в подписи под заголовком видно, что Cloud подтянул новый код.
-PANEL_UI_BUILD = "panel-2026-04-03-inbox-cleanup-safe"
+PANEL_UI_BUILD = "panel-2026-04-03-no-inbox-noise-ui"
 
 st.set_page_config(
     page_title="Linkbuilding — панель вебмастеров",
@@ -418,8 +417,6 @@ def main():
 
     if "imap_sync_report" not in st.session_state:
         st.session_state.imap_sync_report = None
-    if "inbox_cleanup_report" not in st.session_state:
-        st.session_state.inbox_cleanup_report = None
     if "inbox_dedupe_report" not in st.session_state:
         st.session_state.inbox_dedupe_report = None
     if "trade_bargain_report" not in st.session_state:
@@ -676,45 +673,6 @@ def main():
                 st.info("Нет непрочитанных писем в ящике.")
             if st.button("Скрыть отчёт", key="imap_sync_clear"):
                 st.session_state.imap_sync_report = None
-                st.rerun()
-
-    with st.expander("Убрать из «Сбор с ответов» строки, которые не ответы вебмастера", expanded=False):
-        st.caption(
-            "Удаляет **строки данных** (шапка не трогается), если в **«Почте»** отказ доставки / mailer-daemon или по сути только наш шаблон USDT–PayPal, "
-            "либо в **«Домене»** сервис (github.com, slack.com, hunter.io — см. **lib/mail_parse.py**). "
-            "Ячейка **только с email** после кнопки «Прочитать почту» — нормальный формат, **не** удаляется. "
-            "Если снова удалили лишнее: **Файл → История версий** в Google Таблицах."
-        )
-        if st.button("Удалить такие строки из листа", key="inbox_noise_cleanup"):
-            st.session_state.inbox_cleanup_report = remove_inbox_noise_rows(
-                sheets_service=svc,
-                spreadsheet_id=cfg.spreadsheet_inbox_log_id,
-                sheet_gid=cfg.gid_inbox_log,
-            )
-            cr = st.session_state.inbox_cleanup_report
-            if cr.get("errors"):
-                try:
-                    st.toast("Очистка: ошибка (см. блок ниже)", icon="⚠️")
-                except Exception:
-                    pass
-            else:
-                try:
-                    st.toast(f"Удалено строк: {cr.get('rows_deleted', 0)}", icon="✅")
-                except Exception:
-                    pass
-            st.rerun()
-
-    if st.session_state.inbox_cleanup_report is not None:
-        cr = st.session_state.inbox_cleanup_report
-        with st.expander("🧹 Очистка «Сбор с ответов» от строк-шума", expanded=bool(cr.get("errors"))):
-            st.write(
-                f"Лист: **{cr.get('sheet_title') or '—'}** · удалено строк: **{cr.get('rows_deleted', 0)}** "
-                f"(найдено к удалению: {cr.get('candidates', 0)})."
-            )
-            for err in cr.get("errors") or []:
-                st.error(err)
-            if st.button("Скрыть отчёт очистки", key="inbox_cleanup_clear"):
-                st.session_state.inbox_cleanup_report = None
                 st.rerun()
 
     with st.expander("Дедуп строк «Сбор с ответов» и подсветка цен по домену", expanded=False):

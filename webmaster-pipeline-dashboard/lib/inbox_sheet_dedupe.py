@@ -8,7 +8,6 @@ from typing import Any
 
 import pandas as pd
 
-from lib.inbox_sheet_cleanup import batch_delete_rows_by_zero_based_indices
 from lib.sheets_service import (
     a1_all_columns,
     get_sheet_id_by_gid,
@@ -27,6 +26,36 @@ _COLOR_GREEN = {"red": 0.78, "green": 0.94, "blue": 0.80}
 _COLOR_RED = {"red": 0.96, "green": 0.80, "blue": 0.80}
 
 _FLOAT_EPS = 1e-6
+
+
+def batch_delete_rows_by_zero_based_indices(
+    service: Any,
+    spreadsheet_id: str,
+    sheet_id: int,
+    row_indices_0based: list[int],
+) -> None:
+    """Удаляет строки; индексы — как в Sheets API (0 = первая строка листа). Снизу вверх."""
+    unique = sorted({i for i in row_indices_0based if i > 0}, reverse=True)
+    if not unique:
+        return
+    requests = [
+        {
+            "deleteDimension": {
+                "range": {
+                    "sheetId": sheet_id,
+                    "dimension": "ROWS",
+                    "startIndex": idx,
+                    "endIndex": idx + 1,
+                }
+            }
+        }
+        for idx in unique
+    ]
+    (
+        service.spreadsheets()
+        .batchUpdate(spreadsheetId=spreadsheet_id, body={"requests": requests})
+        .execute()
+    )
 
 
 def _norm_sig_cell(v: Any) -> str:
