@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import html as html_module
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 import pandas as pd
@@ -49,6 +49,11 @@ def cell_matches_responsible(cell_val: str, needles: list[str]) -> bool:
 
 
 def today_ddm_yyyy(tz_name: str) -> str:
+    y, m, d = today_ymd(tz_name)
+    return f"{d:02d}.{m:02d}.{y}"
+
+
+def today_ymd(tz_name: str) -> tuple[int, int, int]:
     from zoneinfo import ZoneInfo
 
     name = (tz_name or "").strip() or "Europe/Moscow"
@@ -56,7 +61,71 @@ def today_ddm_yyyy(tz_name: str) -> str:
         tz = ZoneInfo(name)
     except Exception:
         tz = ZoneInfo("Europe/Moscow")
-    return datetime.now(tz).strftime("%d.%m.%Y")
+    now = datetime.now(tz)
+    return (now.year, now.month, now.day)
+
+
+def _valid_ymd(y: int, month: int, day: int) -> tuple[int, int, int] | None:
+    try:
+        dt = datetime(y, month, day)
+    except ValueError:
+        return None
+    return (dt.year, dt.month, dt.day)
+
+
+def parse_calc_trade_date_to_ymd(raw: Any) -> tuple[int, int, int] | None:
+    """Дата торга из ячейки калькулятора → (год, месяц, день) для сравнения с «сегодня»."""
+    if raw is None or isinstance(raw, bool):
+        return None
+    try:
+        if pd.isna(raw):
+            return None
+    except (TypeError, ValueError):
+        pass
+    if isinstance(raw, str):
+        s = raw.strip()
+    else:
+        s = str(raw).strip()
+
+    def _from_serial(val: float) -> tuple[int, int, int] | None:
+        if 25000 <= val <= 65000:
+            epoch = datetime(1899, 12, 30)
+            dt = epoch + timedelta(days=int(val))
+            return (dt.year, dt.month, dt.day)
+        return None
+
+    if s:
+        m = re.match(r"^(\d{1,2})\.(\d{1,2})\.(\d{4})\s*$", s)
+        if m:
+            return _valid_ymd(int(m.group(3)), int(m.group(2)), int(m.group(1)))
+        m2 = re.match(r"^(\d{4})-(\d{2})-(\d{2})\s*$", s)
+        if m2:
+            return _valid_ymd(int(m2.group(1)), int(m2.group(2)), int(m2.group(3)))
+        m3 = re.match(r"^(\d{4})[\s/.-]+(\d{1,2})[\s/.-]+(\d{1,2})\s*$", s)
+        if m3:
+            return _valid_ymd(int(m3.group(1)), int(m3.group(2)), int(m3.group(3)))
+        m4 = re.match(r"^(\d{1,2})/(\d{1,2})/(\d{4})\s*$", s)
+        if m4:
+            a, b, y = int(m4.group(1)), int(m4.group(2)), int(m4.group(3))
+            if a > 12:
+                return _valid_ymd(y, b, a)
+            if b > 12:
+                return _valid_ymd(y, a, b)
+            return _valid_ymd(y, b, a)
+        try:
+            ser = float(s.replace(",", ".").strip())
+            got = _from_serial(ser)
+            if got is not None:
+                return got
+        except ValueError:
+            pass
+        return None
+
+    try:
+        n = float(raw)
+    except (TypeError, ValueError):
+        return None
+    return _from_serial(n)
 
 
 def normalize_domain_cell(v: Any) -> str:
@@ -145,6 +214,8 @@ def resolve_calc_trade_date_col(df: pd.DataFrame, explicit_header: str) -> str |
     for c in df.columns:
         cl = _norm_header(c)
         if "гео" in cl:
+            continue
+        if "коммент" in cl:
             continue
         if "дата" in cl:
             candidates.append(str(c))
@@ -268,6 +339,7 @@ def run_trade_bargain_round(
     report: dict[str, Any] = {
         "errors": [],
         "today": "",
+        "calc_trade_date_column": "",
         "needles": [],
         "rows_matched": 0,
         "domains_considered": 0,
@@ -286,6 +358,7 @@ def run_trade_bargain_round(
 
     today_s = today_ddm_yyyy(cfg.trade_timezone)
     report["today"] = today_s
+    today_tuple = today_ymd(cfg.trade_timezone)
 
     if not (smtp_user and smtp_password):
         report["errors"].append(
@@ -326,9 +399,10 @@ def run_trade_bargain_round(
     if not col_dom or not col_price or not col_resp or not col_date:
         report["errors"].append(
             "Калькулятор: не удалось сопоставить колонки (домен / цена / ответственный / дата). "
-            "Задайте **COL_TRADE_DATE** = точный заголовок столбца с датой **ДД.ММ.ГГГГ**."
+            "Задайте **COL_TRADE_DATE** = точный заголовок столбца с датой торга (не колонка «Комментарий»)."
         )
         return report
+    report["calc_trade_date_column"] = col_date
 
     title_inbox = get_sheet_title_by_gid(
         sheets_service, cfg.spreadsheet_inbox_log_id, cfg.gid_inbox_log
@@ -353,8 +427,9 @@ def run_trade_bargain_round(
     # Последняя подходящая строка по домену перезаписывает предыдущие (низ листа = новее)
     by_domain: dict[str, dict[str, Any]] = {}
     for _, row in df_calc.iterrows():
-        d_raw = str(row.get(col_date, "") or "").strip()
-        if d_raw != today_s:
+        cell_date = row.get(col_date, "")
+        parsed = parse_calc_trade_date_to_ymd(cell_date)
+        if parsed != today_tuple:
             continue
         if not cell_matches_responsible(str(row.get(col_resp, "") or ""), needles):
             continue
@@ -371,8 +446,11 @@ def run_trade_bargain_round(
     report["rows_matched"] = len(by_domain)
     if not by_domain:
         report["errors"].append(
-            f"Нет строк за **{today_s}** с вашим именем в «{col_resp}». "
-            f"Проверьте дату в таблице и **TRADE_RESPONSIBLE_NAME** / linkbuilder-фильтр."
+            f"Нет строк, где **{col_date}** = сегодня **{today_s}** (по **{cfg.trade_timezone}**), "
+            f"и в **{col_resp}** есть подстрока из фильтра. "
+            f"Допустимые форматы даты: **ДД.ММ.ГГГГ**, **ГГГГ-ММ-ДД**, **ГГГГ ММ ДД**. "
+            f"Дата должна быть в колонке торга (**COL_TRADE_DATE** в Secrets, если автоопределение промахнулось). "
+            f"Подстроки: **TRADE_RESPONSIBLE_NAME**, **LINKBUILDER_FILTER**, **LINKBUILDER_ALIASES**."
         )
         return report
 

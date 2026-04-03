@@ -11,6 +11,7 @@ from lib.trade_bargain import (
     collect_responsible_needles,
     find_webmaster_email_in_inbox_log,
     normalize_domain_cell,
+    parse_calc_trade_date_to_ymd,
     parse_price_number,
 )
 
@@ -66,6 +67,14 @@ class TestTradeBargain(unittest.TestCase):
             ]
         )
         self.assertEqual(find_webmaster_email_in_inbox_log(df, "c.org"), "b@c.org")
+
+    def test_parse_calc_trade_date_flexible(self) -> None:
+        self.assertEqual(parse_calc_trade_date_to_ymd("30.03.2026"), (2026, 3, 30))
+        self.assertEqual(parse_calc_trade_date_to_ymd("2026-03-30"), (2026, 3, 30))
+        self.assertEqual(parse_calc_trade_date_to_ymd("2026 03 30"), (2026, 3, 30))
+        self.assertEqual(parse_calc_trade_date_to_ymd("2024 04 03"), (2024, 4, 3))
+        self.assertIsNone(parse_calc_trade_date_to_ymd(""))
+        self.assertIsNone(parse_calc_trade_date_to_ymd("not a date"))
 
 
 if __name__ == "__main__":
