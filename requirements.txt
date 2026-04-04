@@ -1,15 +1,15 @@
 # Streamlit Community Cloud: exactly ONE requirements.txt at repo root (no second file under webmaster-pipeline-dashboard/).
-# После «Processed dependencies!» до UI: SIGSEGV — нативный слой: pyarrow (streamlit тянет pyarrow>=7 обязательно), protobuf, numpy/BLAS, tornado/watchdog.
-# uv без пинов может поставить самые новые колёса pyarrow/tornado/watchdog → на части инстансов Cloud — SIGSEGV.
-# Пины ниже согласованы со streamlit==1.41.1 (requires_dist). См. DEPLOY.md § «Oh no» + secrets.toml.example (переменные для облака).
-# В app.py до pandas/google: PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python, MALLOC_ARENA_MAX=2, лимиты потоков BLAS.
-streamlit==1.41.1
-pyarrow==14.0.2
-pillow==10.4.0
-tornado==6.4.2
+# После «Processed dependencies!»: SIGSEGV / free(): corrupted unsorted chunks — куча в нативных .so (pyarrow, pillow, glibc).
+# streamlit 1.41.x + свежий pyarrow под uv на части инстансов Cloud даёт abort; откат на 1.38.x + pyarrow 11 + pandas 2.0.x — стабильнее.
+# См. DEPLOY.md § «Oh no» + secrets.toml.example.
+# В app.py: PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python, MALLOC_ARENA_MAX=2, BLAS threads; опционально PYTHONMALLOC=malloc в Secrets.
+streamlit==1.38.0
+pyarrow==11.0.0
+pillow==10.3.0
+tornado==6.3.3
 watchdog==4.0.2
 numpy==1.26.4
-pandas==2.2.3
+pandas==2.0.3
 protobuf==4.25.3
 google-api-python-client==2.154.0
 google-auth==2.36.0

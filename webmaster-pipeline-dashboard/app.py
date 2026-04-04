@@ -9,9 +9,11 @@ from __future__ import annotations
 
 import os
 
-# До pandas / google-* / protobuf / pyarrow (streamlit): на Cloud без этого бывает SIGSEGV после «Processed dependencies».
+# До pandas / google-* / protobuf / pyarrow (streamlit): на Cloud без этого бывает SIGSEGV / heap abort после «Processed dependencies».
 os.environ.setdefault("PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION", "python")
 os.environ.setdefault("MALLOC_ARENA_MAX", "2")
+# Обход смешения pymalloc с некоторыми .so на Linux (задайте в Secrets до старта процесса — надёжнее, чем только здесь).
+os.environ.setdefault("PYTHONMALLOC", "malloc")
 for _k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS"):
     os.environ.setdefault(_k, "1")
 
@@ -70,7 +72,7 @@ from lib.sheets_service import (
 )
 
 # Меняйте при каждом релизе UI — в подписи под заголовком видно, что Cloud подтянул новый код.
-PANEL_UI_BUILD = "panel-2026-04-03-imap-uid-search-peer-mid"
+PANEL_UI_BUILD = "panel-2026-04-04-cloud-streamlit-138-pyarrow11"
 
 
 def _safe_trade_filter_stats(fs: object) -> dict[str, int]:
