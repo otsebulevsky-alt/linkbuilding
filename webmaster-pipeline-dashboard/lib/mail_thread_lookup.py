@@ -78,30 +78,91 @@ def _decode_mime(s: str | None) -> str:
     return "".join(out)
 
 
+def _normalize_addr_for_peer_compare(addr: str) -> str:
+    """Сравнение peer: lower/strip; Gmail и googlemail.com — одна «каноническая» пара, без точек в local."""
+    a = (addr or "").strip().lower()
+    if "@" not in a:
+        return a
+    local, _, host = a.partition("@")
+    if host in ("gmail.com", "googlemail.com"):
+        return local.replace(".", "") + "@gmail.com"
+    return a
+
+
+def _peer_addresses_match(peer_email: str, candidate: str) -> bool:
+    p = (peer_email or "").strip()
+    c = (candidate or "").strip()
+    if not p or not c:
+        return False
+    if p.lower() == c.lower():
+        return True
+    return _normalize_addr_for_peer_compare(p) == _normalize_addr_for_peer_compare(c)
+
+
+def _all_header_addresses(msg: Message, *header_names: str) -> list[str]:
+    """Все адреса из заголовков (getaddresses — несколько в одной строке)."""
+    chunks: list[str] = []
+    for name in header_names:
+        v = msg.get(name)
+        if v:
+            chunks.append(_decode_mime(v))
+    if not chunks:
+        return []
+    return [a.strip() for _, a in getaddresses(chunks) if (a or "").strip()]
+
+
 def _header_peer_match(msg: Message, peer_email: str) -> bool:
-    """Письмо между нами и вебмастером (peer в From, Sender, Reply-To или To/Cc)."""
-    pl = (peer_email or "").strip().lower()
+    """Письмо с вебмастером: peer в From (все адреса), Sender, Reply-To, To, Cc, Delivered-To."""
+    pl = (peer_email or "").strip()
     if not pl:
         return False
-    _, f = parseaddr(_decode_mime(msg.get("From")))
-    if f.strip().lower() == pl:
-        return True
+    for addr in _all_header_addresses(msg, "From"):
+        if _peer_addresses_match(pl, addr):
+            return True
     _, snd = parseaddr(_decode_mime(msg.get("Sender")))
-    if snd.strip().lower() == pl:
+    if _peer_addresses_match(pl, snd):
         return True
     _, rpto = parseaddr(_decode_mime(msg.get("Reply-To")))
-    if rpto.strip().lower() == pl:
+    if _peer_addresses_match(pl, rpto):
         return True
-    for _, addr in getaddresses(
-        [
-            _decode_mime(msg.get("To")),
-            _decode_mime(msg.get("Cc")),
-            _decode_mime(msg.get("Delivered-To")),
-        ]
-    ):
-        if addr.strip().lower() == pl:
+    for addr in _all_header_addresses(msg, "To", "Cc", "Bcc", "Delivered-To", "X-Original-To", "Envelope-To"):
+        if _peer_addresses_match(pl, addr):
             return True
     return False
+
+
+def _message_ids_angle_bracketed(text: str) -> list[str]:
+    return re.findall(r"<[^>\s]+>", (text or "").strip())
+
+
+def _resolve_message_id_for_reply(msg: Message, raw_header: bytes | None = None) -> str:
+    """Message-ID письма; если пусто — In-Reply-To, затем последний id из References, затем разбор сырого HEADER."""
+    mid_raw = _decode_mime(msg.get("Message-ID")).strip()
+    if mid_raw:
+        return mid_raw
+    irt = _decode_mime(msg.get("In-Reply-To")).strip()
+    if irt:
+        ids = _message_ids_angle_bracketed(irt)
+        if ids:
+            return ids[0]
+        return irt.split()[0] if irt.split() else ""
+    ref = _decode_mime(msg.get("References", "")).strip()
+    ids = _message_ids_angle_bracketed(ref)
+    if ids:
+        return ids[-1]
+    if raw_header:
+        try:
+            txt = raw_header.decode("utf-8", errors="replace")
+        except Exception:
+            txt = ""
+        for line in txt.splitlines():
+            if line.lower().startswith("message-id:"):
+                rest = line.split(":", 1)[1].strip()
+                found = _message_ids_angle_bracketed(rest)
+                if found:
+                    return found[0]
+                return rest.strip()
+    return ""
 
 
 def _normalize_msg_id(mid: str) -> str:
@@ -269,8 +330,10 @@ def _iter_search_uid_batches(
     if uids:
         yield uids, True
 
+    # Только UID SEARCH: imap.search возвращает **порядковые номера**, а ниже UID FETCH —
+    # иначе подставляются чужие письма и peer/Message-ID никогда не сходятся.
     try:
-        typ, data = imap.search(None, "TEXT", dom)
+        typ, data = imap.uid("SEARCH", None, "TEXT", dom)
         if typ == "OK":
             uids = _parse_uid_list(data)
             if uids:
@@ -314,19 +377,18 @@ def _scan_uids_for_reply_context(
         if domain_required_in_headers and not _headers_mention_domain(msg, dom):
             continue
         subj = _decode_mime(msg.get("Subject"))
-        mid_raw = _decode_mime(msg.get("Message-ID")).strip()
-        if not mid_raw:
-            irt = _decode_mime(msg.get("In-Reply-To")).strip()
-            if irt:
-                first = irt.replace("\n", " ").split()[0]
-                mid_raw = first
+        mid_raw = _resolve_message_id_for_reply(msg, raw)
         if not mid_raw:
             continue
         mid_n = _normalize_msg_id(mid_raw)
-        refs = _build_references(msg)
+        ref = _decode_mime(msg.get("References", "")).strip()
+        if ref:
+            references = ref if mid_n in ref else f"{ref} {mid_n}"
+        else:
+            references = mid_n
         return {
             "message_id": mid_n,
-            "references": refs,
+            "references": references,
             "subject": _reply_subject(subj)[:998],
         }
     return None

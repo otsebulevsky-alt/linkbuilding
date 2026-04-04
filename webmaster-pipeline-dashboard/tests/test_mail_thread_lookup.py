@@ -12,6 +12,8 @@ from lib.mail_thread_lookup import (
     _mailbox_arg_for_imap,
     _mailboxes_for_thread_search,
     _normalize_msg_id,
+    _peer_addresses_match,
+    _resolve_message_id_for_reply,
 )
 
 
@@ -103,6 +105,21 @@ class TestMailThreadLookup(unittest.TestCase):
         self.assertTrue(w.startswith('"'))
         self.assertTrue(w.endswith('"'))
         self.assertIn("[Gmail]/Sent Mail", w)
+
+    def test_peer_addresses_match_gmail_dots(self) -> None:
+        self.assertTrue(_peer_addresses_match("a.b@gmail.com", "ab@gmail.com"))
+        self.assertTrue(_peer_addresses_match("Ab@gmail.com", "a.b@googlemail.com"))
+
+    def test_resolve_message_id_from_references_last(self) -> None:
+        import email
+
+        raw = (
+            b"References: <a@b> <c@d>\r\n"
+            b"Subject: x\r\n"
+            b"\r\n"
+        )
+        msg = email.message_from_bytes(raw)
+        self.assertEqual(_resolve_message_id_for_reply(msg, raw), "<c@d>")
 
 
 if __name__ == "__main__":
