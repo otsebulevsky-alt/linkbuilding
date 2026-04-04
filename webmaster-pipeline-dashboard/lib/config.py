@@ -204,7 +204,10 @@ def load_config(secrets: Any | None = None) -> AppConfig:
             secrets, "SPREADSHEET_REGISTRY_2_ID", _env("SPREADSHEET_REGISTRY_2_ID", "1DaiRFqU2d_85cXr0fDmyhzIY4V9fm0zxh4KraZMOFnw")
         ),
         spreadsheet_calculator_id=_secrets_get(
-            secrets, "SPREADSHEET_CALCULATOR_ID", _env("SPREADSHEET_CALCULATOR_ID", "1xrjeVD0Q94JI08v2gFvtv1NbiTAbq0fSjv-A-g5pPSs")
+            secrets,
+            "SPREADSHEET_CALCULATOR_ID",
+            # [REF: shared-docs/.../hack-382/implementation-notes.md] Фрагмент Q94JI08 — буква I, не цифра 1 (J108 = другой id).
+            _env("SPREADSHEET_CALCULATOR_ID", "1xrjeVD0Q94JI08v2gFvtv1NbiTAbq0fSjv-A-g5pPSs"),
         ),
         spreadsheet_payment_options_id=_secrets_get(
             secrets,

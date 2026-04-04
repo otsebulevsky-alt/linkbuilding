@@ -423,7 +423,10 @@ def find_reply_context_for_peer(
         with imap_cm as imap:
             try:
                 imap.login(imap_user, imap_password)
-            except imaplib.IMAP4.error:
+            except imaplib.IMAP4.error as e:
+                err_s = str(e)
+                if "AUTHENTICATIONFAILED" in err_s.upper():
+                    return None, "imap_login_failed:authentication"
                 return None, "imap_login_failed"
 
             meaningful: str | None = None

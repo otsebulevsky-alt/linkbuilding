@@ -1,0 +1,14 @@
+# Таблица оценки доноров (целевая)
+
+[ВНУТРЕННИЙ] Калькулятор доноров — готовый калькулятор с листами Telecomasia, Metaratings, Настройки.
+https://docs.google.com/spreadsheets/d/1xrjeVD0Q94JI08v2gFvtv1NbiTAbq0fSjv-A-g5pPSs/edit?gid=225938948#gid=225938948
+
+Колонки листа (A–K): Domain, # DR, Traffic, # RD, # LD, RD/LD, Стагнация, Цена$, Ссылки, Балл, Вывод.
+
+Когда вы присылаете пачку доноров в чат, ассистент считает балл и вывод и дописывает строки в donors-evaluation.csv. Чтобы они сами попали в таблицу:
+
+Запустите скрипт из репо: `python internal/seo/linkbuilding/scripts/sheet_append_donors.py` (из корня проекта). Он прочитает donors-evaluation.csv и допишет все строки в этот калькулятор на лист Telecomasia (или укажите `--sheet Metaratings`). При первом запуске откроется браузер для входа в Google; дальше скрипт будет работать без браузера. Нужны зависимости: `pip install gspread google-auth-oauthlib`. Credentials: лучше положить OAuth credentials.json в `personal/env/credentials.json` (как для Google MCP) — скрипт подхватит их.
+
+Альтернатива вручную: открыть donors-evaluation.csv, скопировать строки данных, вставить в калькулятор в первую свободную строку (Ctrl+V).
+
+Если подключён Google Workspace MCP с записью в Sheets, можно попросить записать данные прямо в эту таблицу.

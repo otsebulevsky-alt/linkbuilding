@@ -23,7 +23,7 @@ from lib.mail_smtp import send_smtp_html
 from lib.sheets_service import (
     a1_all_columns,
     get_sheet_title_by_gid,
-    get_spreadsheet_values_rows,
+    get_spreadsheet_values_rows_with_error,
     get_values_as_dataframe,
     resolve_calculator_sheet_title,
 )
@@ -309,6 +309,9 @@ def _heuristic_calc_trade_date_col(df: pd.DataFrame) -> str | None:
         cl = _norm_header(c)
         if "коммент" in cl and "денис" in cl:
             return str(c)
+        # В UI заголовок часто обрезают до «Комментарий (Де)» — «денис» в строке нет.
+        if "коммент" in cl and re.search(r"комментарий\s*\(\s*де", cl):
+            return str(c)
     candidates: list[str] = []
     for c in df.columns:
         cl = _norm_header(c)
@@ -349,6 +352,12 @@ def resolve_calc_trade_date_col(df: pd.DataFrame, explicit_header: str) -> str |
     for c in df.columns:
         if ex.lower() in _norm_header(c):
             return str(c)
+    # Secrets: «Комментарий (Денис)», в листе заголовок обрезан до «…(Де)».
+    if "денис" in ex.lower() and "коммент" in ex.lower():
+        for col in df.columns:
+            cl = _norm_header(col)
+            if "коммент" in cl and re.search(r"комментарий\s*\(\s*де", cl):
+                return str(col)
     return _heuristic_calc_trade_date_col(df)
 
 
@@ -438,15 +447,25 @@ def load_calculator_dataframe_for_trade(
     sheet_title: str,
     col_trade_date: str,
     col_trade_responsible: str = "",
-) -> tuple[pd.DataFrame, int]:
+) -> tuple[pd.DataFrame, int, str]:
+    """(dataframe, header_row_index, api_error). api_error — если API вернул ошибку или пустой диапазон."""
     esc = sheet_title.replace("'", "''")
     # Было ZZ400 — строки ниже не попадали в «торг»; 10000 с запасом под длинные листы.
     rng = f"'{esc}'!A1:ZZ10000"
-    rows = get_spreadsheet_values_rows(sheets_service, spreadsheet_id, rng)
+    rows, api_err = get_spreadsheet_values_rows_with_error(sheets_service, spreadsheet_id, rng)
+    if api_err:
+        return pd.DataFrame(), -1, api_err
+    if not rows:
+        return (
+            pd.DataFrame(),
+            -1,
+            "По диапазону нет данных: проверьте **SPREADSHEET_CALCULATOR_ID** и **GID_CALCULATOR_TAB_1** "
+            "(откройте нужную вкладку в браузере — в URL будет `.../d/<ID>/edit#gid=<GID>`). "
+            "Имя файла в браузере и ID в Secrets должны совпадать.",
+        )
     rows = _pad_rows_to_max_width(rows)
-    return discover_calculator_dataframe_from_rows(
-        rows, col_trade_date, col_trade_responsible
-    )
+    df, hi = discover_calculator_dataframe_from_rows(rows, col_trade_date, col_trade_responsible)
+    return df, hi, ""
 
 
 def resolve_inbox_domain_col(df: pd.DataFrame) -> str | None:
@@ -646,7 +665,7 @@ def run_trade_bargain_round(
         return report
     report["calc_sheet_title"] = title_calc
 
-    df_calc, hdr_row_idx = load_calculator_dataframe_for_trade(
+    df_calc, hdr_row_idx, calc_api_err = load_calculator_dataframe_for_trade(
         sheets_service,
         cfg.spreadsheet_calculator_id,
         title_calc,
@@ -654,7 +673,14 @@ def run_trade_bargain_round(
         cfg.col_trade_responsible,
     )
     if df_calc.empty:
-        report["errors"].append("Калькулятор: лист пуст, не прочитан API или нет строк под шапкой.")
+        msg = (
+            "Калькулятор: лист пуст, не прочитан API или нет строк под шапкой. "
+            "Данные в **другом** файле или на **другой вкладке** — панель читает книгу из **SPREADSHEET_CALCULATOR_ID** "
+            f"и вкладку с **GID_CALCULATOR_TAB_1** (сейчас лист «{title_calc}»)."
+        )
+        if calc_api_err:
+            msg += f" **По API:** {calc_api_err}"
+        report["errors"].append(msg)
         return report
     report["calc_header_row_1based"] = hdr_row_idx + 1 if hdr_row_idx >= 0 else 1
 

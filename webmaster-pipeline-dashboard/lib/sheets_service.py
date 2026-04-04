@@ -303,6 +303,14 @@ def get_values_as_dataframe(service, spreadsheet_id: str, range_a1: str) -> pd.D
 
 def get_spreadsheet_values_rows(service: Any, spreadsheet_id: str, range_a1: str) -> list[list[Any]]:
     """Сырые строки листа (majorDimension=ROWS). Пустой список при ошибке API."""
+    rows, _err = get_spreadsheet_values_rows_with_error(service, spreadsheet_id, range_a1)
+    return rows
+
+
+def get_spreadsheet_values_rows_with_error(
+    service: Any, spreadsheet_id: str, range_a1: str
+) -> tuple[list[list[Any]], str]:
+    """Как get_spreadsheet_values_rows, но второй элемент — текст ошибки API (пустая строка при успехе)."""
     try:
         result = (
             service.spreadsheets()
@@ -310,11 +318,19 @@ def get_spreadsheet_values_rows(service: Any, spreadsheet_id: str, range_a1: str
             .get(spreadsheetId=spreadsheet_id, range=range_a1, majorDimension="ROWS")
             .execute()
         )
-    except HttpError:
-        return []
-    except Exception:
-        return []
-    return result.get("values") or []
+    except HttpError as e:
+        try:
+            st = int(e.resp.status)
+        except Exception:
+            st = 0
+        tail = str(e).replace("\n", " ").strip()
+        if len(tail) > 280:
+            tail = tail[:277] + "..."
+        return [], f"Google Sheets API HTTP {st}: {tail}"
+    except Exception as e:
+        msg = f"{type(e).__name__}: {e}"
+        return [], (msg[:300] + "...") if len(msg) > 300 else msg
+    return result.get("values") or [], ""
 
 
 def filter_by_linkbuilder(

@@ -43,11 +43,14 @@ from googleapiclient.errors import HttpError
 
 from lib.config import (
     _secrets_get,
-    _secrets_get_int,
     load_config,
     load_service_account_info,
     service_account_client_email,
     use_google_adc,
+)
+from lib.gmail_credentials import (
+    resolve_imap_user_password,
+    resolve_smtp_host_port_user_password,
 )
 from lib.mail_imap import fetch_unread_summaries
 from lib.mail_smtp import send_smtp_html
@@ -72,7 +75,7 @@ from lib.sheets_service import (
 )
 
 # Меняйте при каждом релизе UI — в подписи под заголовком видно, что Cloud подтянул новый код.
-PANEL_UI_BUILD = "panel-2026-04-04-cloud-streamlit-138-pyarrow11"
+PANEL_UI_BUILD = "panel-2026-04-04-secrets-toml-clipboard-all4"
 
 
 def _safe_trade_filter_stats(fs: object) -> dict[str, int]:
@@ -117,33 +120,13 @@ def _secrets():
 
 
 def _gmail_imap_credentials(secrets_obj):
-    """Gmail IMAP: dedicated keys or same as SMTP (app password).
-
-    Не использовать `secrets_obj or {}` и прямой `.get()` на st.secrets: при отсутствии Secrets
-    Streamlit бросает StreamlitSecretNotFoundError. Чтение — через lib.config._secrets_get.
-    """
-    user = (_secrets_get(secrets_obj, "GMAIL_IMAP_USER") or _secrets_get(secrets_obj, "GMAIL_SMTP_USER")).strip()
-    password = (
-        _secrets_get(secrets_obj, "GMAIL_IMAP_APP_PASSWORD") or _secrets_get(secrets_obj, "GMAIL_SMTP_APP_PASSWORD")
-    ).strip()
-    return user, password
+    """Gmail IMAP: см. lib.gmail_credentials (заглушка xxxx в IMAP не блокирует реальный SMTP-пароль)."""
+    return resolve_imap_user_password(secrets_obj)
 
 
 def _gmail_smtp_settings(secrets_obj):
-    """SMTP для автоответа про оплату и вкладки «Жду публикации».
-
-    Симметрично IMAP: если заданы только **GMAIL_IMAP_***, используем их для SMTP
-    (один пароль приложения на чтение и отправку).
-    """
-    user = _secrets_get(secrets_obj, "GMAIL_SMTP_USER").strip()
-    password = _secrets_get(secrets_obj, "GMAIL_SMTP_APP_PASSWORD").strip()
-    if not user:
-        user = _secrets_get(secrets_obj, "GMAIL_IMAP_USER").strip()
-    if not password:
-        password = _secrets_get(secrets_obj, "GMAIL_IMAP_APP_PASSWORD").strip()
-    host = (_secrets_get(secrets_obj, "GMAIL_SMTP_HOST", "smtp.gmail.com") or "smtp.gmail.com").strip()
-    port = _secrets_get_int(secrets_obj, "GMAIL_SMTP_PORT", 587)
-    return host, port, user, password
+    """SMTP: см. lib.gmail_credentials."""
+    return resolve_smtp_host_port_user_password(secrets_obj)
 
 
 def _normalize_session_email_override() -> str:

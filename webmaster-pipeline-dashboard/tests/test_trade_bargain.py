@@ -146,6 +146,14 @@ class TestTradeBargain(unittest.TestCase):
         )
         self.assertEqual(resolve_calc_trade_date_col(df, ""), "Date")
 
+    def test_resolve_trade_date_truncated_comment_header(self) -> None:
+        """Как в узкой колонке Sheets: «Комментарий (Де)» без «нис»."""
+        df = pd.DataFrame(
+            columns=["Domain", "Цена, $", "Ответственный", "Комментарий (Де)"],
+        )
+        col = resolve_calc_trade_date_col(df, "Комментарий (Денис)")
+        self.assertEqual(col, "Комментарий (Де)")
+
     def test_discover_header_after_preamble_rows(self) -> None:
         rows = [
             ["[ВНУТРЕННИЙ] Калькулятор доноров"],

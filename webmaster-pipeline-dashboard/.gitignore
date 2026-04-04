@@ -2,6 +2,8 @@
 .streamlit/secrets.toml.bak
 .streamlit/gcp-service-account.json
 .streamlit/*.json
+# Собранный TOML для вставки в Streamlit Cloud (содержит ключ — не коммитить)
+.streamlit/generated-for-streamlit-cloud-secrets.toml
 .env
 __pycache__/
 *.pyc
